@@ -1,0 +1,8 @@
+{
+  "_comment": "메시지 상태 정보 - 실제 데이터는 Documents/GOE메신저도우미/ 폴더에 저장됩니다",
+  "_sample_message_id": {
+    "status": "pending",
+    "starred": false,
+    "completed_at": null
+  }
+}

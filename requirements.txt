@@ -1,0 +1,26 @@
+# GOE 메신저 도우미 - 의존성
+
+# GUI (선택: 더 예쁜 UI)
+ttkbootstrap>=1.10.0
+
+# 설정 파일
+pyyaml>=6.0
+
+# Windows UI 자동화 (핵심 - Windows 전용)
+pywinauto>=0.6.8
+pyautogui>=0.9.54
+Pillow>=10.0.0
+
+# Google Calendar 연동 (선택)
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+google-api-python-client>=2.100.0
+
+# MCP 서버 (Claude Code 연동)
+mcp>=1.0.0
+
+# 텍스트 유사도 (선택: 중복 병합용)
+rapidfuzz>=3.0.0
+
+# 빌드 도구 (개발용)
+# pyinstaller>=6.0

@@ -1,0 +1,226 @@
+# GOE 메신저 도우미 - GitHub Actions 빌드 워크플로우
+# 이 워크플로우는 Windows 환경에서 PyInstaller를 사용하여 exe 파일을 빌드합니다.
+
+name: Build Windows Executable
+
+on:
+  # main 또는 master 브랜치에 push 시 트리거
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'  # v로 시작하는 태그 (예: v1.0.0)
+
+  # 수동 실행 허용
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: '릴리스 생성 여부'
+        required: false
+        default: 'false'
+        type: boolean
+
+# 환경 변수 설정
+env:
+  APP_NAME: GOE메신저도우미
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build:
+    name: Build Windows Executable
+    runs-on: windows-latest
+
+    steps:
+      # 1. 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 전체 히스토리 가져오기 (태그 정보 포함)
+
+      # 2. Python 설정
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      # 3. 의존성 설치
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          echo "의존성 설치 완료"
+
+      # 4. PyInstaller 설치
+      - name: Install PyInstaller
+        run: |
+          pip install pyinstaller>=6.0
+          echo "PyInstaller 설치 완료"
+
+      # 5. 아이콘 생성
+      - name: Create icon
+        run: |
+          python create_icon.py
+          echo "아이콘 생성 완료"
+
+      # 6. PyInstaller로 exe 빌드
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller goe_messenger.spec
+          echo "exe 빌드 완료"
+
+      # 7. data 파일 복사 (dist 폴더로)
+      - name: Copy data files to dist
+        run: |
+          # data 폴더 복사
+          if (Test-Path "data") {
+            Copy-Item -Path "data" -Destination "dist/data" -Recurse -Force
+            echo "data 폴더 복사 완료"
+          }
+
+          # assets 폴더 복사 (이미 spec에서 처리되지만 확인용)
+          if (Test-Path "assets") {
+            Copy-Item -Path "assets" -Destination "dist/assets" -Recurse -Force
+            echo "assets 폴더 복사 완료"
+          }
+
+          # README 및 기타 문서 복사
+          if (Test-Path "README.md") {
+            Copy-Item -Path "README.md" -Destination "dist/" -Force
+          }
+        shell: pwsh
+
+      # 8. 빌드 결과 확인
+      - name: Verify build output
+        run: |
+          echo "=== 빌드 결과 확인 ==="
+          Get-ChildItem -Path dist -Recurse | Format-Table Name, Length, LastWriteTime
+        shell: pwsh
+
+      # 9. ZIP 패키지 생성
+      - name: Create ZIP package
+        run: |
+          # 버전 정보 가져오기 (태그 또는 커밋 해시)
+          $version = if ($env:GITHUB_REF -match 'refs/tags/(.+)') { $matches[1] } else { $env:GITHUB_SHA.Substring(0, 7) }
+          $zipName = "${{ env.APP_NAME }}-$version-windows.zip"
+
+          # ZIP 파일 생성
+          Compress-Archive -Path "dist/*" -DestinationPath $zipName -Force
+
+          # 결과 출력
+          echo "ZIP 파일 생성 완료: $zipName"
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+
+          # 파일 크기 확인
+          Get-Item $zipName | Format-List Name, Length
+        shell: pwsh
+
+      # 10. 아티팩트 업로드 (exe)
+      - name: Upload exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-exe
+          path: dist/${{ env.APP_NAME }}.exe
+          retention-days: 30
+
+      # 11. 아티팩트 업로드 (ZIP 패키지)
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-package
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30
+
+      # 12. 빌드 정보 출력
+      - name: Build summary
+        run: |
+          echo "=========================================="
+          echo "빌드 완료!"
+          echo "=========================================="
+          echo "앱 이름: ${{ env.APP_NAME }}"
+          echo "버전: ${{ env.VERSION }}"
+          echo "Python: ${{ env.PYTHON_VERSION }}"
+          echo "ZIP 파일: ${{ env.ZIP_NAME }}"
+          echo "=========================================="
+
+  # 릴리스 생성 (태그 푸시 시 또는 수동 실행 시)
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # 태그 푸시 시 또는 수동으로 릴리스 생성 요청 시에만 실행
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+
+    steps:
+      # 코드 체크아웃 (CHANGELOG 등 참조용)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 아티팩트 다운로드 (exe)
+      - name: Download exe artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-exe
+          path: ./artifacts/
+
+      # 아티팩트 다운로드 (ZIP)
+      - name: Download ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-package
+          path: ./artifacts/
+
+      # 다운로드된 파일 확인
+      - name: List downloaded artifacts
+        run: |
+          echo "=== 다운로드된 아티팩트 ==="
+          ls -la ./artifacts/
+
+      # 버전 정보 추출
+      - name: Get version info
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="v0.0.0-$(echo $GITHUB_SHA | cut -c1-7)"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "버전: $VERSION"
+
+      # GitHub Release 생성
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: ${{ env.APP_NAME }} ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## ${{ env.APP_NAME }} ${{ steps.version.outputs.VERSION }}
+
+            ### 다운로드
+            - **Windows 실행 파일**: `${{ env.APP_NAME }}.exe`를 다운로드하여 실행하세요.
+            - **전체 패키지**: ZIP 파일에는 실행 파일과 필요한 데이터 파일이 포함되어 있습니다.
+
+            ### 설치 방법
+            1. ZIP 파일을 다운로드합니다.
+            2. 원하는 위치에 압축을 풉니다.
+            3. `${{ env.APP_NAME }}.exe`를 실행합니다.
+
+            ### 요구 사항
+            - Windows 10 이상
+            - 경기교육통합메신저(AtMessenger7) 설치 필요
+
+            ### 변경 사항
+            - 자세한 변경 사항은 커밋 히스토리를 참고하세요.
+
+            ---
+            *이 릴리스는 GitHub Actions에서 자동으로 생성되었습니다.*
+          files: |
+            ./artifacts/${{ env.APP_NAME }}.exe
+            ./artifacts/*.zip
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
