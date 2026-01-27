@@ -24,6 +24,7 @@ on:
 # 환경 변수 설정
 env:
   APP_NAME: GOE메신저도우미
+  APP_NAME_EN: GOE-Messenger-Helper
   PYTHON_VERSION: '3.11'
 
 jobs:
@@ -123,7 +124,7 @@ jobs:
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-exe
+          name: ${{ env.APP_NAME_EN }}-exe
           path: dist/${{ env.APP_NAME }}.exe
           retention-days: 30
 
@@ -131,7 +132,7 @@ jobs:
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-package
+          name: ${{ env.APP_NAME_EN }}-package
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
