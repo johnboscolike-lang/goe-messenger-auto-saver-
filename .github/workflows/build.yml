@@ -58,9 +58,11 @@ jobs:
           pip install pyinstaller>=6.0
           echo "PyInstaller 설치 완료"
 
-      # 5. 아이콘 생성
+      # 5. 아이콘 생성 (실패해도 계속 진행)
       - name: Create icon
+        continue-on-error: true
         run: |
+          pip install Pillow
           python create_icon.py
           echo "아이콘 생성 완료"
 
