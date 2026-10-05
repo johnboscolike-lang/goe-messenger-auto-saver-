@@ -770,11 +770,39 @@ const IM_TRACKS = {
     },
     to: 3, toNote: '서울 2026 전기 4명 기준 (추정)', comp: 4,
   },
+
+  elec: {
+    id: 'elec', lv: 's', name: '전문교과(전자)', icon: '🔌', color: '#4FE3FF',
+    skills: [{ k: 'edu', name: '교육학' }, { k: 'con', name: '전자 이론' }, { k: 'ped', name: '전공교육론' }, { k: 'prac', name: '실습' }, { k: 's2', name: '2차' }],
+    exam1: { date: '2026-11-28(토)', parts: IM_EX1_SECONDARY, note: '전문교과(전자). 전공 범위(회로이론·전자회로·디지털 논리 등)는 게임용 구성 (추정).' },
+    exam2: { parts: IM_EX2_PRACTICE('실기·실습 (시·도별 상이, 추정)'), note: '전자 실기·실습 내용은 시·도 공고마다 다르다 (추정).' },
+    traits: ['납땜 연기 속에서 교육학 논술을 외운다.', '전자 전공 강의는 귀하다. 기출과 전공서가 곧 선생님.', '트랜지스터는 신호를 키우는데, 내 멘탈은 왜 감쇠할까.'],
+    burnout: 1.0, practice: true, practiceRoom: '전자 실습실', lessonFee: 10, // 실습 부품·재료 (추정)
+    lectureLanes: ['회로이론', '전자회로', '디지털 논리'],
+    sortLanes: {
+      lanes: ['회로이론', '전자회로', '디지털 논리'],
+      items: [
+        { t: '옴의 법칙', k: 'left' }, { t: '키르히호프 법칙', k: 'left' }, { t: '테브난 정리', k: 'left' }, { t: 'RC 시정수', k: 'left' },
+        { t: '다이오드 정류', k: 'up' }, { t: '트랜지스터 증폭', k: 'up' }, { t: '연산증폭기', k: 'up' }, { t: '제너 정전압', k: 'up' },
+        { t: '플립플롭', k: 'right' }, { t: '카르노 맵', k: 'right' }, { t: '불 대수', k: 'right' }, { t: '멀티플렉서', k: 'right' },
+      ],
+    },
+    // 실습 미니게임(workshop) 내용 덮어쓰기: 전자 = 납땜 · 회로 구성
+    shop: {
+      title: '전자 실습', sub: '납땜 · 회로 구성', banner: '전자 실습!', bannerSub: '작업 절차대로 → 안전 판단',
+      order: { f: '작업 절차', ask: '작업 순서대로 누르세요', list: ['회로도 · 부품 확인', '부품 극성 · 규격 확인', '부품 배치 · 납땜', '테스터로 단락 · 도통 점검', '전원 인가 · 동작 확인'] },
+      picks: [
+        { f: '안전 1', info: '상황: 달궈진 납땜 인두를 잠깐 내려놓는다.', ask: '올바른 방법은?', ans: '인두 받침대에 꽂아 둔다', opts: ['작업대 위에 눕혀 둔다', '켠 채로 공구함에 넣는다'], why: '뜨거운 인두는 항상 받침대에!' },
+        { f: '안전 2', info: '상황: 전해 콘덴서를 기판에 꽂으려 한다.', ask: '꽂기 전 확인할 것은?', ans: '+ / − 극성을 확인한다', opts: ['색깔만 맞춘다', '아무 방향으로 꽂는다'], why: '극성이 반대면 콘덴서가 손상될 수 있다!' },
+      ],
+    },
+    to: 2, toNote: '전문교과 TO 1~5명 수준 (추정)', comp: 4,
+  },
 };
 // 선택 화면 순서
 const IM_TRACK_ORDER = {
   e: ['e-gen', 'e-sp'],
-  s: ['kor', 'eng', 'math', 'soc', 'sci', 'tech', 'home', 'info', 'mus', 'art', 'pe', 'health', 'nutri', 'couns', 'sp', 'voc'],
+  s: ['kor', 'eng', 'math', 'soc', 'sci', 'tech', 'home', 'info', 'mus', 'art', 'pe', 'health', 'nutri', 'couns', 'sp', 'voc', 'elec'],
 };
 
 /* ---------- 1-b. 교육학 공통 분류 카드 (sortMini) ---------- */
@@ -1190,6 +1218,29 @@ const IM_QB = {
     { q: '감전 사고 시 가장 먼저 할 일은?', a: '전원 차단', w: ['맨손으로 떼기', '물 뿌리기'], tip: '구조자 안전이 먼저.' },
     { q: '누전 시 회로를 자동 차단하는 장치는?', a: '누전차단기', w: ['변압기', '콘덴서'], tip: 'ELB.' },
     { q: '직렬연결 저항의 합성 저항은?', a: '각 저항의 합', w: ['역수의 합', '가장 큰 저항'], tip: '병렬은 역수의 합의 역수.' },
+  ],
+
+  elec: [
+    { q: '옴의 법칙을 식으로 나타내면?', a: 'V = IR', w: ['P = VI', 'Q = CV'], tip: '전압 = 전류 × 저항.' },
+    { q: '한 마디로 들어온 전류 합 = 나간 전류 합은?', a: '키르히호프 전류 법칙', w: ['키르히호프 전압 법칙', '렌츠의 법칙'], tip: 'KCL. 전압 쪽은 KVL.' },
+    { q: '회로를 전압원 + 직렬저항 하나로 바꾸는 정리는?', a: '테브난 정리', w: ['노턴 정리', '중첩의 원리'], tip: '노턴은 전류원 + 병렬저항.' },
+    { q: 'RC 직렬 회로의 시정수 τ는?', a: 'RC', w: ['R/C', '1/RC'], tip: '약 63.2%까지 충전되는 시간.' },
+    { q: '교류를 한 방향 전류로 바꾸는 다이오드 회로는?', a: '정류 회로', w: ['증폭 회로', '발진 회로'], tip: '반파·전파·브리지 정류.' },
+    { q: '역방향 항복을 이용해 정전압을 얻는 소자는?', a: '제너 다이오드', w: ['발광 다이오드', '포토 다이오드'], tip: '정전압 회로의 기본.' },
+    { q: 'BJT(바이폴라 트랜지스터)의 세 단자는?', a: '이미터·베이스·컬렉터', w: ['게이트·소스·드레인', '애노드·캐소드·게이트'], tip: 'FET는 게이트·소스·드레인.' },
+    { q: '공통 이미터 증폭기의 입·출력 위상차는?', a: '180°', w: ['0°', '90°'], tip: '반전 증폭.' },
+    { q: '이상적 연산증폭기의 입력 임피던스는?', a: '무한대', w: ['0', '1kΩ'], tip: '출력 임피던스는 0.' },
+    { q: '연산증폭기 반전 증폭기의 전압 이득은?', a: '−Rf/Ri', w: ['1 + Rf/Ri', 'Ri/Rf'], tip: '비반전은 1 + Rf/Ri.' },
+    { q: '입력이 모두 1일 때만 출력이 1인 게이트는?', a: 'AND', w: ['OR', 'XOR'], tip: '직렬 스위치와 같다.' },
+    { q: '그것만으로 모든 논리 회로를 만드는 게이트는?', a: 'NAND', w: ['AND', 'XOR'], tip: 'NOR도 만능 게이트.' },
+    { q: '2진수 1010을 10진수로 바꾸면?', a: '10', w: ['12', '8'], tip: '8 + 2 = 10.' },
+    { q: '드모르간 법칙에서 (A·B)′ 는?', a: 'A′ + B′', w: ['A′ · B′', 'A + B'], tip: '곱의 보수 = 보수의 합.' },
+    { q: '1비트를 기억하는 순서 논리 소자는?', a: '플립플롭', w: ['멀티플렉서', '디코더'], tip: 'JK·D·T 플립플롭.' },
+    { q: '인접 칸을 묶어 논리식을 간소화하는 표는?', a: '카르노 맵', w: ['타이밍도', '상태도'], tip: '1·2·4·8칸씩 묶는다.' },
+    { q: '여러 입력 중 하나를 골라 출력하는 회로는?', a: '멀티플렉서', w: ['디멀티플렉서', '인코더'], tip: '선택선으로 고른다.' },
+    { q: '달궈진 납땜 인두를 잠시 둘 곳은?', a: '인두 받침대', w: ['작업대 위', '기판 위'], tip: '화상·화재 예방.' },
+    { q: '전해 콘덴서를 꽂을 때 꼭 확인할 것은?', a: '극성', w: ['색깔', '무게'], tip: '반대로 꽂으면 손상 위험.' },
+    { q: '직업 현장 능력을 국가가 표준화한 체계는?', a: 'NCS', w: ['IEP', 'GED'], tip: '국가직무능력표준.' },
   ],
 };
 
@@ -1905,7 +1956,7 @@ const IM_PRICES = {
   trainRoundTrip: 10,    // 명절 귀성 왕복 (추정)
   allowance: 80,         // 매달 들어오는 돈 (부모님 용돈 or 저축)
   partTimeShift: 3,      // 알바 1회 (추정)
-  lessonFee: { mus: 30, art: 25, pe: 20, voc: 10, sci: 8 }, // 실기 교과 월 지출 (추정)
+  lessonFee: { mus: 30, art: 25, pe: 20, voc: 10, elec: 10, sci: 8 }, // 실기 교과 월 지출 (추정)
 };
 
 /* ---------- 7. 대사 ---------- */
@@ -4092,7 +4143,8 @@ function imMnLabMini(E, opts) {
   });
 }
 function imMnShopMini(E, opts) {
-  return imMnProcForm(E, opts, {
+  const ov = imMnTrack(opts.track).shop || {}; // 트랙별 실습 내용 덮어쓰기 (전자 = 납땜·회로)
+  return imMnProcForm(E, opts, Object.assign({
     kind: 'workshop', title: '전기 실습', sub: '옥내 배선 · 제어 회로', aggTitle: '실습 작업 절차서', goal: '작업 순서 + 안전 판단', color: '#5A4A2E', bg: 'practice', stamp: '동작 확인',
     banner: '전기·기계 실습!', bannerSub: '작업 절차대로 → 안전 판단',
     order: { f: '작업 절차', ask: '작업 순서대로 누르세요', list: ['도면 · 부품 확인', '전원 차단 · 검전', '배선 · 결선', '절연저항 · 도통 시험', '전원 투입 · 동작 확인'] },
@@ -4101,7 +4153,7 @@ function imMnShopMini(E, opts) {
       { f: '안전 2', info: '상황: 선반(기계) 가공 중 칩이 길게 감긴다.', ask: '올바른 대응은?', ans: '기계를 정지한 뒤 칩 브러시로 제거한다', opts: ['회전 중에 손으로 걷어 낸다', '장갑 낀 손으로 잡아당긴다'], why: '회전체 근처에 손 금지 · 정지 후 도구로!' },
     ],
     orderTime: 15, pickTime: 8,
-  });
+  }, ov));
 }
 // 소묘: 지시된 영역(← 그림자 · ↑ 양감 · → 배경)을 눌러 명암을 쌓아 그림 완성
 function imMnArtMini(E, opts) {
@@ -4413,7 +4465,7 @@ function imSkillDefs(t) {
   return (Array.isArray(s) ? s : Object.keys(s).map((k) => ({ key: k, label: s[k] }))).map((x) => (typeof x === 'string' ? { key: x, label: x } : { key: x.key || x.k, label: x.label || x.name || x.k, short: x.short }));
 }
 const imIsPractice = (t) => !!t.practice;
-const IM_PRAC_KIND = { mus: 'piano', art: 'art', pe: 'gym', sci: 'lab', voc: 'workshop' };
+const IM_PRAC_KIND = { mus: 'piano', art: 'art', pe: 'gym', sci: 'lab', voc: 'workshop', elec: 'workshop' };
 const imPracKind = (t) => IM_PRAC_KIND[t.id] || (typeof t.practice === 'string' ? t.practice : 'lab');
 function imMonths() { return imHas('IM_MONTHS') ? (Array.isArray(IM_MONTHS) ? IM_MONTHS : Object.values(IM_MONTHS)) : []; }
 function imPrice(k, d) { const P = imHas('IM_PRICES') ? IM_PRICES : {}; const v = P[k]; return typeof v === 'number' ? v : d; }
