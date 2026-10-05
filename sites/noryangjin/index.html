@@ -3706,7 +3706,7 @@ function imTicketMini(E, opts = {}) {
     });
     // 유의사항 + 직인
     g.fillStyle = '#4A5675'; g.font = `700 10.5px ${E.FB}`; g.textAlign = 'left';
-    ['· 08:10까지 입실 · 신분증 · 아날로그 시계만', '· 1교시 교육학 → 2·3교시 전공 (점심시간 없음)', '· 정답은 공개되지 않습니다'].forEach((l, i) => g.fillText(l, x + 14, py + ph + 24 + i * 15));
+    ['· 08:30까지 입실 · 신분증 · 아날로그 시계만', '· 1교시 교육학 → 2·3교시 전공 (점심시간 없음)', '· 정답은 공개되지 않습니다'].forEach((l, i) => g.fillText(l, x + 14, py + ph + 24 + i * 15));
     g.save(); g.translate(x + w - 44, y + h - 40); g.rotate(-0.2); g.strokeStyle = 'rgba(210,59,46,.85)'; g.lineWidth = 2.5; g.beginPath(); g.arc(0, 0, 22, 0, 7); g.stroke();
     g.fillStyle = 'rgba(210,59,46,.85)'; g.font = `11px ${E.FD}`; g.textAlign = 'center'; g.fillText('교육감', 0, -2); g.fillText('직인', 0, 11); g.restore();
     g.restore();
@@ -4541,6 +4541,568 @@ function imSleepMini(E, opts = {}) {
   return m;
 }
 
+/* =====================================================================
+   15. 시험날 아침 — 전날 밤 · 늦잠(일어나!!) · 준비(엄마 문자) · 준비물 · 지하철 지연 · 시험장 착각 · 교문
+   공용: opts.clock(이 단계 시작 시각, 분) · opts.dl(입실 마감, 분) · 화면 위 시계 패널(남은 분: 초록 → 노랑 20분 → 빨강 5분)
+   모든 미니에 m.morning = true · m.botStep(mode, now) — 봇 mode: null(좋은 선택) | 'late' | 'near'
+   결과는 m 필드로 (core 가 시간·게이지 반영): alarm m.lost/m.woke · pack m.packed/m.missing/m.decoys · subway m.choice/m.cost/m.misses · venue m.choice
+   ===================================================================== */
+const IM_MN_MORN_SPAN = 120; // 시계 막대: 마감 120분 전 → 마감
+function imMnMornClock(E, clock, dl, y) {
+  const g = E.g, VW = E.VW, C = E.C, y0 = y ?? 96, left = Math.round(dl - clock);
+  const col = left < 0 ? C.hot : left <= 5 ? C.hot : left <= 20 ? C.chalk : C.act;
+  g.fillStyle = 'rgba(12,14,30,.9)'; E.rr(12, y0, VW - 24, 56, 12); g.fill();
+  g.strokeStyle = col; g.lineWidth = 2; E.rr(12, y0, VW - 24, 56, 12); g.stroke();
+  const tt = E.hm(Math.max(0, Math.round(clock)));
+  g.font = `36px ${E.FD}`; g.fillStyle = col; g.textAlign = 'left';
+  g.fillText(Math.floor(E.G.simClock * 2) % 2 || left < 0 ? tt : tt.replace(':', ' '), 26, y0 + 38);
+  g.textAlign = 'right'; g.font = `800 11px ${E.FB}`; g.fillStyle = E.C.ink2;
+  g.fillText(`입실 마감 ${E.hm(dl)}`, VW - 26, y0 + 20);
+  g.font = `19px ${E.FD}`; g.fillStyle = col;
+  g.fillText(left >= 0 ? `${left}분 남음` : `${-left}분 늦음`, VW - 26, y0 + 41);
+  const fr = E.clamp((clock - (dl - IM_MN_MORN_SPAN)) / IM_MN_MORN_SPAN, 0, 1);
+  g.fillStyle = 'rgba(255,255,255,.12)'; E.rr(22, y0 + 47, VW - 44, 4, 2); g.fill();
+  g.fillStyle = col; E.rr(22, y0 + 47, (VW - 44) * fr, 4, 2); g.fill();
+}
+function imMnMornHead(E, label, frac, right, hot) { imMnHead(E, `🌅 시험날 아침 · ${label}`, frac, hot ? E.C.hot : E.C.info, right || ''); }
+const imMnMornSync = (E, v) => { if (E.G && E.G.D) E.G.min = v; }; // 왼쪽 시계 · 역 전광판도 같은 시각
+// 아이콘: 이모지 + 그림 아이콘(수정테이프 · 계산기)
+function imMnItemIcon(E, it, x, y, s) {
+  const g = E.g;
+  if (it.draw === 'tape') {
+    g.save(); g.translate(x, y); g.scale(s / 48, s / 48);
+    g.fillStyle = '#F4F6FA'; E.rr(-22, -14, 44, 28, 10); g.fill(); g.strokeStyle = '#3B6FD8'; g.lineWidth = 3; E.rr(-22, -14, 44, 28, 10); g.stroke();
+    g.fillStyle = '#3B6FD8'; g.beginPath(); g.arc(-6, 0, 9, 0, 7); g.fill(); g.fillStyle = '#F4F6FA'; g.beginPath(); g.arc(-6, 0, 4, 0, 7); g.fill();
+    g.fillStyle = '#1B2340'; g.beginPath(); g.moveTo(18, -6); g.lineTo(30, 0); g.lineTo(18, 6); g.closePath(); g.fill();
+    g.restore(); return;
+  }
+  if (it.draw === 'calc') {
+    g.save(); g.translate(x, y); g.scale(s / 48, s / 48);
+    g.fillStyle = '#2B3156'; E.rr(-16, -22, 32, 44, 5); g.fill(); g.fillStyle = '#B8E0C8'; g.fillRect(-11, -17, 22, 10);
+    g.fillStyle = '#DCE2EE'; for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) g.fillRect(-11 + c * 8, -3 + r * 8, 6, 6);
+    g.restore(); return;
+  }
+  g.font = `${s}px ${E.FB}`; g.textAlign = 'center'; g.fillStyle = '#1B2340'; g.fillText(it.icon || '?', x, y + s * 0.36);
+}
+
+/* ---- 15a. 시험 전날 밤: 일찍 자기 vs 마지막으로 한 번 더 (m.choice = 'early' | 'cram') ---- */
+function imEveMini(E, opts = {}) {
+  const fin = imMnFin(E, opts), C = E.C, lab = opts.stage === 2 ? '2차' : '1차', fb = !!opts.flashback;
+  const item = { q: '시험 전날 밤', opts: ['일찍 자기', '마지막으로 한 번 더 보기'], subs: ['늦잠 위험 ↓', '실력+ 늦잠↑'], ans: -1 };
+  const m = imMnChoiceMini(E, {
+    fin, title: fb ? `어젯밤 · ${lab} 시험 전날` : `${lab} 시험 전날 밤`, banner: fb ? '어젯밤…' : `내일 ${lab} 시험`, bannerSub: `알람 ${opts.alarm || '06:40'} · 일찍 잘까, 한 번 더 볼까?`, bg: 'gosiwon', style: null, bpm: 76, items: [item], time: 9, endHold: 1.9, noFail: true, neutral: true,
+    scene: { window: false, night: true },
+    padLabel: (it, k) => (k === 0 ? ['← 잠', '일찍 자기'] : ['복습 →', '한 번 더']),
+    onTimeout: () => 0,
+    botPick: (mm) => (mm.botMode === 'late' ? 1 : 0),
+    onPick(mm, idx) { mm.choice = idx === 1 ? 'cram' : 'early'; },
+    score: (mm) => (mm.choice === 'cram' ? 0 : 1),
+    drawBody(mm, st) {
+      const g = E.g, VW = E.VW, top = 104, clock = opts.time || (opts.stage === 2 ? '23:20' : '23:10');
+      g.fillStyle = 'rgba(10,12,30,.5)'; g.fillRect(0, 0, VW, E.VH);
+      g.fillStyle = '#1B1F33'; E.rr(VW / 2 - 70, top, 140, 64, 12); g.fill();
+      g.strokeStyle = '#4A5675'; g.lineWidth = 2; E.rr(VW / 2 - 70, top, 140, 64, 12); g.stroke();
+      g.fillStyle = '#FF5C6C'; g.font = `40px ${E.FD}`; g.textAlign = 'center'; g.fillText(Math.floor(st * 2) % 2 ? clock : clock.replace(':', ' '), VW / 2, top + 47);
+      const cy = Math.min(E.VH * 0.42, (mm.cardsTop || E.VH * 0.6) - 130);
+      const grd = g.createRadialGradient(VW / 2, cy, 10, VW / 2, cy, 160); grd.addColorStop(0, 'rgba(255,228,150,.5)'); grd.addColorStop(1, 'rgba(255,228,150,0)');
+      g.fillStyle = grd; g.fillRect(0, cy - 160, VW, 320);
+      // 수험표 + 알람 맞춘 휴대폰
+      g.save(); g.translate(VW / 2 - 50, cy + 6); g.rotate(-0.08);
+      g.fillStyle = '#FFFDF4'; E.rr(-58, -36, 116, 72, 6); g.fill(); g.fillStyle = '#2E3F86'; g.fillRect(-58, -36, 116, 16);
+      g.fillStyle = '#FFD54A'; g.font = `11px ${E.FD}`; g.fillText(`${lab} 시험 수험표`, 0, -24); g.fillStyle = '#1B2340'; g.font = `800 10px ${E.FB}`;
+      g.fillText(opts.name ? `성명 ${opts.name}` : '성명 ○○○', 0, -2); g.fillText(`입실 마감 ${opts.dl || '08:30'}`, 0, 14); g.restore();
+      g.fillStyle = '#1B1F33'; E.rr(VW / 2 + 46, cy - 30, 44, 76, 8); g.fill(); g.fillStyle = '#2F3A6B'; E.rr(VW / 2 + 50, cy - 24, 36, 60, 5); g.fill();
+      g.fillStyle = C.chalk; g.font = `13px ${E.FD}`; g.fillText('⏰', VW / 2 + 68, cy - 2); g.font = `800 10px ${E.FB}`; g.fillStyle = C.ink; g.fillText(opts.alarm || '06:40', VW / 2 + 68, cy + 16);
+      const done = mm.phase === 'end';
+      const line = done ? (mm.choice === 'cram' ? '목차 한 번만 더… (새벽 1시 넘었다)' : '불 끄고 눕는다. 알람 세 번 확인.') : fb ? '어젯밤의 나는 어떻게 했더라…' : '내일이다. 심장 소리가 너무 크다.';
+      g.fillStyle = 'rgba(10,12,30,.82)'; E.rr(20, cy + 62, VW - 40, 36, 12); g.fill();
+      g.fillStyle = C.ink; g.font = `17px ${E.FD}`; E.fitText(line, VW - 60, 17, E.FD); g.fillText(line, VW / 2, cy + 86);
+      if (done && mm.choice === 'early') { g.fillStyle = C.chalk; g.font = `26px ${E.FD}`; g.fillText('Z z z', VW / 2 + 70, cy - 46 - (st % 1) * 10); }
+    },
+  });
+  m.choice = null; m.morning = true; m.kind = 'eve';
+  m.botStep = function (mode) { this.botMode = mode; this._bt = (this._bt || 0) + 1; if (this._bt % 22 === 0) this.auto(); };
+  return m;
+}
+
+/* ---- 15b. 늦잠: 「일어나!!」 연타 (↑ 또는 화면 탭) → m.woke · m.lost(분) ---- */
+function imAlarmMini(E, opts = {}) {
+  const fin = imMnFin(E, opts), C = E.C, dl = opts.dl, snooze = opts.snooze || 10, LIM = opts.limit || 7, RATE = 3, FAIL = opts.failAdd || 25;
+  const m = {
+    type: 'imMorning', kind: 'alarm', bpm: 132, style: 'urgent', cfg: { window: false, night: true, me: false }, noFail: true, morning: true,
+    phase: 'ring', ph0: 0, meter: 0, taps: 0, woke: false, lost: 0, kick: 0, lastRing: -1,
+    pad: [null, ['↑ 연타', '화면 탭도 OK'], null],
+    clockAt(st) { return opts.clock + (this.phase === 'ring' ? snooze + Math.min(LIM, st) * RATE : this.lost); },
+    enter() { E.banner('늦잠!!', `알람이 ${snooze}분째 울리는 중 · ↑ 연타`, true); E.sfx.ring(); },
+    update(dt, st) {
+      this.kick = Math.max(0, this.kick - dt * 5);
+      if (this.phase === 'ring') {
+        if (!this.full) this.meter = Math.max(0, this.meter - dt * 0.1);
+        if (Math.floor(st) !== this.lastRing) { this.lastRing = Math.floor(st); E.sfx.ring(); }
+        if (this.full) { this.woke = true; this.lost = snooze + Math.round(st * RATE); this.phase = 'end'; this.ph0 = st; E.sfx.perfect(); E.burst(E.VW / 2, E.VH * 0.5, C.chalk, 26); }
+        else if (st >= LIM) { this.woke = false; this.lost = snooze + FAIL; this.phase = 'end'; this.ph0 = st; E.sfx.bad(); E.shake(0.5); }
+        imMnMornSync(E, this.clockAt(st));
+      } else if (this.phase === 'end' && st - this.ph0 > 2.3 && !this.done) {
+        imMnMornSync(E, opts.clock + this.lost);
+        this.done = true; fin(this.woke ? E.clamp(1 - (this.lost - snooze) / FAIL, 0, 1) : 0, this);
+      }
+    },
+    input(dir, now) {
+      const st = now - this.t0;
+      if (this.phase === 'end') { if (st - this.ph0 > 1) this.ph0 = st - 2.3; return; }
+      this.taps++; this.meter = Math.min(1, this.meter + 0.085); if (this.meter >= 0.999) { this.meter = 1; this.full = true; } this.kick = 1; E.sfx.key();
+      if (this.taps % 3 === 1) E.pop(E.VW * (0.3 + Math.random() * 0.4), E.VH * 0.36 + Math.random() * 40, E.rnd(['일어나!', '으아악', '5분만…', '시험!!', '눈 떠!']), C.chalk, 17);
+    },
+    tap(p, now) { this.input('up', now); },
+    botStep(mode, now) {
+      this._bt = (this._bt || 0) + 1;
+      if (this.phase === 'end') { if (this._bt % 30 === 0) this.input('up', now); return; }
+      if (mode === 'late') return; // 테스트: 끝까지 못 일어남
+      if (this._bt % (mode === 'near' ? 6 : 5) === 0) this.input('up', now);
+    },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH, bot = VH - E.padV, ring = this.phase === 'ring';
+      imMnBG(E, 'gosiwon', this, b, now);
+      g.fillStyle = `rgba(8,10,26,${ring ? 0.72 - this.meter * 0.3 : 0.25})`; g.fillRect(0, 0, VW, VH);
+      imMnMornHead(E, '늦잠', ring ? 1 - st / LIM : 0, ring ? `${Math.max(0, Math.ceil(LIM - st))}초` : this.woke ? '기상!' : '…', true);
+      imMnMornClock(E, this.clockAt(st), dl, 96);
+      // 「일어나!!」
+      const sh = ring ? Math.sin(st * 40) * (2 + this.kick * 5) : 0, sc = 1 + (ring ? 0.06 * Math.sin(st * 9) + this.kick * 0.12 : 0);
+      g.save(); g.translate(VW / 2 + sh, 205); g.scale(sc, sc);
+      g.font = `46px ${E.FD}`; g.textAlign = 'center'; g.lineWidth = 8; g.strokeStyle = 'rgba(10,12,30,.9)';
+      const big = ring ? '일어나!!' : this.woke ? '벌떡!' : '쾅쾅쾅!!';
+      g.strokeText(big, 0, 16); g.fillStyle = ring ? C.hot : this.woke ? C.act : C.hr; g.fillText(big, 0, 16); g.restore();
+      // 침대 + 이불
+      const by = bot - 190, bx = VW / 2 - 150;
+      g.fillStyle = 'rgba(8,10,26,.55)'; g.fillRect(0, by - 40, VW, bot - by + 40);
+      g.fillStyle = '#6B4A30'; E.rr(bx, by + 30, 300, 30, 6); g.fill(); g.fillStyle = '#5A3C26'; g.fillRect(bx + 6, by + 60, 12, 24); g.fillRect(bx + 282, by + 60, 12, 24);
+      g.fillStyle = '#F2EEE4'; E.rr(bx + 8, by - 6, 64, 30, 12); g.fill();
+      if (ring || !this.woke) {
+        g.fillStyle = (E.GAME.me && E.GAME.me(E).hair) || '#2B2233'; g.beginPath(); g.arc(bx + 44, by + 6, 17, 0, 7); g.fill();
+        const wob = ring ? Math.sin(st * 30) * this.kick * 4 : 0;
+        g.fillStyle = '#3F5A8A'; E.rr(bx + 46, by - 2 + wob, 246, 40, 16); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.12)'; for (let i = 0; i < 7; i++) g.fillRect(bx + 60 + i * 34, by + 2 + wob, 3, 32);
+        if (ring) { g.fillStyle = `rgba(255,213,74,${1 - this.meter})`; g.font = `22px ${E.FD}`; g.textAlign = 'left'; g.fillText('Z z z', bx + 60, by - 22 - (st % 1) * 12); }
+      } else {
+        g.fillStyle = '#3F5A8A'; E.rr(bx + 46, by + 10, 246, 26, 12); g.fill();
+        E.drawFront(bx + 70, by + 24, 0.62, { pose: 'talk', mood: 'calm', bob: Math.abs(Math.sin(st * 8)) * 4 });
+      }
+      // 바닥의 휴대폰 (진동)
+      const vib = ring ? Math.sin(st * 70) * 3 : 0, px = VW - 70 + vib, py = by - 60;
+      g.save(); g.translate(px, py); g.rotate(-0.25 + vib * 0.02);
+      g.fillStyle = '#1B1F33'; E.rr(-22, -36, 44, 72, 8); g.fill(); g.fillStyle = ring && Math.floor(st * 4) % 2 ? '#FF9F6B' : '#2F3A6B'; E.rr(-18, -30, 36, 56, 5); g.fill();
+      g.fillStyle = '#fff'; g.font = `800 10px ${E.FB}`; g.textAlign = 'center'; g.fillText(E.hm(opts.clock), 0, -10); g.fillText('알람', 0, 4); g.font = `13px ${E.FB}`; g.fillText('⏰', 0, 21);
+      g.restore();
+      if (ring) for (let k = 0; k < 3; k++) { g.strokeStyle = `rgba(255,159,107,${0.5 - k * 0.15})`; g.lineWidth = 2; g.beginPath(); g.arc(px, py, 34 + k * 10 + (st * 30) % 10, -2.4, -0.7); g.stroke(); }
+      // 잠 깨기 게이지 / 결과
+      const my = bot - 40;
+      g.fillStyle = 'rgba(10,12,30,.85)'; E.rr(16, my - 24, VW - 32, 50, 12); g.fill();
+      if (ring) {
+        g.fillStyle = C.ink; g.font = `800 12px ${E.FB}`; g.textAlign = 'left'; g.fillText('잠 깨기', 28, my - 6);
+        g.textAlign = 'right'; g.fillText(`${Math.round(this.meter * 100)}%`, VW - 28, my - 6);
+        g.fillStyle = 'rgba(255,255,255,.15)'; E.rr(28, my + 2, VW - 56, 12, 6); g.fill();
+        g.fillStyle = this.meter > 0.7 ? C.act : C.chalk; E.rr(28, my + 2, (VW - 56) * this.meter, 12, 6); g.fill();
+      } else {
+        g.fillStyle = this.woke ? C.act : C.hr; g.font = `16px ${E.FD}`; g.textAlign = 'center';
+        const t = this.woke ? `${E.hm(opts.clock + this.lost)} 기상 · 늦잠 +${this.lost}분` : `총무님 노크에 겨우 깼다 · +${this.lost}분`;
+        E.fitText(t, VW - 50, 16, E.FD); g.fillText(t, VW / 2, my + 7);
+      }
+    },
+  };
+  return m;
+}
+
+/* ---- 15c. 준비 + 가족 문자 (엄마 「시험 잘 봐」) — 자동 진행 · ↑ = 빨리 ---- */
+function imReadyMini(E, opts = {}) {
+  const fin = imMnFin(E, opts), C = E.C, dl = opts.dl, add = opts.add || 25, msgs = opts.msgs || [], DUR = 1.2 + msgs.length * 1.15 + 1.4;
+  const acts = opts.over ? ['세수 30초 컷', '옷은 어제 그대로', '물 한 병'] : ['세수', '따뜻한 옷', '바나나 하나'];
+  const m = {
+    type: 'imMorning', kind: 'ready', bpm: 100, style: null, cfg: { window: false, morning: true }, noFail: true, morning: true, skip: 0,
+    pad: [null, ['↑ 빨리!', '준비 서두르기'], null],
+    tt(st) { return st + this.skip; },
+    clockAt(st) { return opts.clock + add * E.clamp(this.tt(st) / (DUR - 0.8), 0, 1); },
+    enter() { E.banner(opts.over ? '늦었다! 준비!' : '시험날 아침', opts.over ? '세수·옷·가방 — 빨리!' : `알람 한 번에 기상 · ${E.hm(opts.clock)}`, true); },
+    update(dt, st) {
+      imMnMornSync(E, this.clockAt(st));
+      if (this.tt(st) >= DUR && !this.done) { imMnMornSync(E, opts.clock + add); this.done = true; fin(1, this); }
+    },
+    input(dir, now) { this.skip += 0.7; E.sfx.key(); },
+    tap(p, now) { this.input('up', now); },
+    botStep(mode, now) { this._bt = (this._bt || 0) + 1; if (this._bt % 40 === 0) this.input('up', now); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, bot = E.VH - E.padV, t = this.tt(st);
+      imMnBG(E, 'gosiwon', this, b, now);
+      g.fillStyle = 'rgba(8,10,26,.45)'; g.fillRect(0, 0, E.VW, E.VH);
+      imMnMornHead(E, '준비', E.clamp(1 - t / DUR, 0, 1), opts.stage === 2 ? '2차' : '1차');
+      imMnMornClock(E, this.clockAt(st), dl, 96);
+      // 휴대폰 메신저
+      const pw = Math.min(260, VW - 60), px = VW / 2 - pw / 2, py = 168, ph = Math.min(bot - 96 - py, 52 + msgs.length * 66);
+      g.fillStyle = '#1B1F33'; E.rr(px - 8, py - 8, pw + 16, ph + 16, 22); g.fill();
+      g.fillStyle = '#BACEE0'; E.rr(px, py, pw, ph, 14); g.fill();
+      g.fillStyle = '#A9BED3'; E.rr(px, py, pw, 30, 14); g.fill(); g.fillRect(px, py + 16, pw, 14);
+      g.fillStyle = '#1B2340'; g.font = `15px ${E.FD}`; g.textAlign = 'center'; g.fillText(opts.room || '가족 💛', VW / 2, py + 21);
+      let y = py + 44;
+      msgs.forEach((ms, i) => {
+        const at = 0.8 + i * 1.15; if (t < at) return;
+        const k = E.clamp((t - at) / 0.25, 0, 1), me = !!ms.me, font = `800 13px ${E.FB}`;
+        const lines = E.wrapText(ms.text, pw - 92, font, 3); g.font = font;
+        const w = Math.max(...lines.map((l) => g.measureText(l).width)) + 20, h = lines.length * 17 + 12;
+        g.globalAlpha = k;
+        if (!me) { g.fillStyle = '#4A5675'; g.font = `800 10px ${E.FB}`; g.textAlign = 'left'; g.fillText(ms.who || '엄마', px + 12, y + 9); y += 13; }
+        const bx = me ? px + pw - 12 - w : px + 12;
+        g.fillStyle = me ? '#FFE94A' : '#FFFFFF'; E.rr(bx, y, w, h, 10); g.fill();
+        g.fillStyle = '#1B2340'; g.font = font; g.textAlign = 'left'; lines.forEach((l, j) => g.fillText(l, bx + 10, y + 18 + j * 17));
+        g.globalAlpha = 1; y += h + 8;
+      });
+      // 준비 체크
+      const cy = bot - 54; g.fillStyle = 'rgba(10,12,30,.85)'; E.rr(16, cy - 18, VW - 32, 46, 12); g.fill();
+      acts.forEach((a, i) => { const on = t > 1 + i * (DUR - 1.6) / 3; g.fillStyle = on ? C.act : C.ink2; g.font = `800 12px ${E.FB}`; g.textAlign = 'center'; g.fillText(`${on ? '✓' : '·'} ${a}`, 16 + (VW - 32) * (i + 0.5) / 3, cy + 9); });
+    },
+  };
+  return m;
+}
+
+/* ---- 15d. 준비물: 하나씩 ← 두고 가기 / → 가방에 (항목당 2.6초) → m.packed(Set) · m.missing · m.decoys ---- */
+function imPackMini(E, opts = {}) {
+  const fin = imMnFin(E, opts), C = E.C, dl = opts.dl, items = opts.items || [], PER = opts.per || 2.6, INTRO = 2.6, add = opts.add || 5;
+  const needList = opts.needText || items.filter((x) => x.need).map((x) => x.t).join(' · ');
+  const m = {
+    type: 'imMorning', kind: 'pack', bpm: 110, style: 'urgent', cfg: { window: false, morning: true }, noFail: true, morning: true,
+    phase: 'intro', ph0: 0, i: 0, iSt: 0, packed: new Set(), picks: [], right: 0, missing: [], decoys: [], last: null,
+    pad: [['←', '두고 가기'], null, ['→', '가방에 넣기']],
+    clockAt(st) { return opts.clock + add * E.clamp(this.phase === 'intro' ? 0 : this.phase === 'end' ? 1 : (this.i + E.clamp((st - this.iSt) / PER, 0, 1)) / items.length, 0, 1); },
+    enter() { E.banner('준비물 챙기기!', '← 두고 가기 · 가방에 넣기 →', true); },
+    cur() { return items[this.i]; },
+    startItem(st) { this.phase = 'item'; this.iSt = st; },
+    decide(pack, st, timeout) {
+      const it = this.cur(); if (!it) return;
+      const ok = pack === !!it.need;
+      this.picks[this.i] = pack; if (pack) this.packed.add(it.id); if (ok) this.right++;
+      this.last = { pack, timeout, t: st };
+      if (pack) { E.sfx.good(1); E.pop(E.VW / 2, E.VH * 0.5, '가방에 쏙', C.act, 18); } else { E.sfx.swipe ? E.sfx.swipe() : E.sfx.key(); E.pop(E.VW / 2, E.VH * 0.5, timeout ? '시간 초과 · 두고 감' : '두고 감', timeout ? C.hot : C.ink2, 16); }
+      this.phase = 'fb'; this.ph0 = st;
+    },
+    update(dt, st) {
+      imMnMornSync(E, this.clockAt(st));
+      if (this.phase === 'intro' && st >= INTRO) this.startItem(st);
+      else if (this.phase === 'item' && st - this.iSt >= PER) this.decide(false, st, true);
+      else if (this.phase === 'fb' && st - this.ph0 >= 0.4) { this.i++; if (this.i >= items.length) this.toEnd(st); else this.startItem(st); }
+      else if (this.phase === 'end' && st - this.ph0 >= 3.4 && !this.done) { this.done = true; fin(items.length ? this.right / items.length : 1, this); }
+    },
+    toEnd(st) {
+      this.phase = 'end'; this.ph0 = st;
+      this.missing = items.filter((x) => x.need && !this.packed.has(x.id)).map((x) => x.id);
+      this.decoys = items.filter((x) => !x.need && this.packed.has(x.id)).map((x) => x.id);
+      if (!this.missing.length && !this.decoys.length) { E.sfx.perfect(); E.burst(E.VW / 2, E.VH * 0.45, C.act, 20); } else E.sfx.bad();
+    },
+    input(dir, now) {
+      const st = now - this.t0;
+      if (this.phase === 'intro') { if (st > 1) this.startItem(st); return; }
+      if (this.phase === 'end') { if (st - this.ph0 > 1.2) this.ph0 = st - 3.4; return; }
+      if (this.phase !== 'item') return;
+      if (dir === 'left') this.decide(false, st); else if (dir === 'right') this.decide(true, st);
+    },
+    botStep(mode, now) {
+      const st = now - this.t0; this._bt = (this._bt || 0) + 1;
+      if (this.phase === 'intro') { if (st > 1.2) this.input('up', now); return; }
+      if (this.phase === 'end') { if (st - this.ph0 > 1.5) this.input('up', now); return; }
+      if (this.phase === 'item' && st - this.iSt > 0.5) { const it = this.cur(); this.input(it && it.need ? 'right' : 'left', now); }
+    },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH, bot = VH - E.padV;
+      imMnBG(E, 'gosiwon', this, b, now);
+      g.fillStyle = 'rgba(8,10,26,.5)'; g.fillRect(0, 0, VW, VH);
+      const fr = this.phase === 'item' ? 1 - (st - this.iSt) / PER : this.phase === 'intro' ? 1 - st / INTRO : 0;
+      imMnMornHead(E, '준비물', fr, this.phase === 'end' ? '확인' : `${Math.min(this.i + 1, items.length)}/${items.length}`, fr < 0.35 && this.phase === 'item');
+      imMnMornClock(E, this.clockAt(st), dl, 96);
+      const top = 166;
+      if (this.phase === 'intro') {
+        // 수험생 유의사항 포스트잇
+        g.save(); g.translate(VW / 2, Math.min(bot - 190, top + 290)); g.rotate(-0.03);
+        g.fillStyle = '#FFF3A8'; E.rr(-140, -100, 280, 200, 6); g.fill(); g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(-140, -100, 280, 16);
+        g.fillStyle = '#1B2340'; g.textAlign = 'center'; g.font = `19px ${E.FD}`; g.fillText('📌 수험생 유의사항', 0, -62);
+        g.font = `800 12.5px ${E.FB}`; g.fillText('꼭 챙길 것', 0, -32);
+        E.wrapText(needList, 240, `800 14px ${E.FB}`, 3).forEach((l, j) => { g.fillStyle = '#1F4E9C'; g.fillText(l, 0, -10 + j * 19); });
+        g.fillStyle = '#C62828'; g.font = `800 12.5px ${E.FB}`; g.fillText(opts.stage === 2 ? '전자기기 · 출신 대학 드러나는 옷 금지' : '전자기기(스마트워치 · 계산기) 반입 금지', 0, 60);
+        g.restore();
+      } else if (this.phase === 'item' || this.phase === 'fb') {
+        const it = this.cur(), k = this.phase === 'item' ? E.clamp((st - this.iSt) / 0.18, 0, 1) : 1;
+        const fbx = this.phase === 'fb' ? (this.last && this.last.pack ? 1 : -1) * E.clamp((st - this.ph0) / 0.35, 0, 1) * VW * 0.7 : 0;
+        const cx = VW / 2 + (1 - k) * VW * 0.6 + fbx, cy = top + 130;
+        g.globalAlpha = this.phase === 'fb' ? 1 - E.clamp((st - this.ph0) / 0.4, 0, 1) : 1;
+        imMnPaper(E, cx - 110, cy - 100, 220, 190, '#FFFDF4', 18);
+        if (it) {
+          imMnItemIcon(E, it, cx, cy - 26, 64);
+          g.fillStyle = '#1B2340'; g.textAlign = 'center'; E.fitText(it.t, 196, 24, E.FD); g.fillText(it.t, cx, cy + 46);
+          if (it.sub) { g.fillStyle = '#6A7393'; g.font = `800 11px ${E.FB}`; g.fillText(it.sub, cx, cy + 68); }
+        }
+        g.globalAlpha = 1;
+        // 좌우 안내
+        g.fillStyle = 'rgba(10,12,30,.8)'; E.rr(12, cy + 102, 108, 28, 14); g.fill(); E.rr(VW - 120, cy + 102, 108, 28, 14); g.fill();
+        g.font = `15px ${E.FD}`; g.fillStyle = '#6DB5FF'; g.textAlign = 'center'; g.fillText('← 두고 가기', 66, cy + 122); g.fillStyle = '#4FD69C'; g.fillText('가방에 →', VW - 66, cy + 122);
+      } else {
+        // 결과 목록
+        imMnPaper(E, 16, top, VW - 32, Math.min(bot - top - 96, 64 + items.length * 30), '#FFFDF4', 12);
+        g.fillStyle = '#1B2340'; g.font = `18px ${E.FD}`; g.textAlign = 'center';
+        const perfect = !this.missing.length && !this.decoys.length;
+        g.fillText(perfect ? '완벽! 가방 지퍼 잠금' : '현관에서 가방을 다시 열어 보니…', VW / 2, top + 30);
+        items.forEach((it, j) => {
+          const y = top + 58 + j * 30, has = this.packed.has(it.id), bad = it.need ? !has : has;
+          imMnItemIcon(E, it, 40, y - 5, 20);
+          g.textAlign = 'left'; g.font = `800 13px ${E.FB}`; g.fillStyle = bad ? '#C62828' : has ? '#1F7A4D' : '#8A93AD';
+          g.fillText(it.t, 60, y);
+          g.textAlign = 'right'; g.font = `800 11.5px ${E.FB}`;
+          const tag = it.need ? (has ? '✓ 챙김' : `✗ ${it.miss || '깜빡'}`) : has ? `⚠ ${it.bad || '반입 금지'}` : '두고 감 ✓';
+          E.fitText(tag, VW - 60 - 150, 11.5, E.FB); g.font = `800 ${Math.min(11.5, parseFloat(g.font) || 11.5)}px ${E.FB}`; g.fillText(tag, VW - 30, y);
+        });
+      }
+      // 가방
+      const by = bot - 56; g.fillStyle = 'rgba(10,12,30,.85)'; E.rr(16, by - 20, VW - 32, 52, 12); g.fill();
+      g.fillStyle = C.ink2; g.font = `800 11px ${E.FB}`; g.textAlign = 'left'; g.fillText('🎒 가방', 28, by - 2);
+      items.filter((x) => this.packed.has(x.id)).forEach((x, j) => imMnItemIcon(E, x, 92 + j * 32, by + 6, 24));
+    },
+  };
+  return m;
+}
+
+/* ---- 15e. 지하철: 정상 운행 / 지연 → ← 택시 · ↑ 뛰기(타이밍 3번) · → 기다리기 → m.choice · m.cost(분) · m.misses ---- */
+function imSubwayMini(E, opts = {}) {
+  const fin = imMnFin(E, opts), C = E.C, dl = opts.dl, delayed = !!opts.delayed, canTaxi = opts.canTaxi !== false;
+  const RIDE = opts.ride || 40, TAXI = opts.taxi || 30, RUN = opts.run || 32, RMISS = opts.runMiss || 7, WAIT = opts.wait || 0, LIM = 8;
+  const RUNS = [['횡단보도 초록불!', '건너!'], ['버스 문이 닫힌다!', '탑승!'], ['환승 계단!', '점프!']];
+  const m = {
+    type: 'imMorning', kind: 'subway', bpm: 120, style: delayed ? 'tense' : null, cfg: { train: delayed ? 'none' : 'arrive', me: true }, noFail: true, morning: true,
+    phase: 'ann', ph0: 0, choice: delayed ? null : 'none', cost: RIDE, misses: 0, run: 0, runSt: 0, runRes: [], anim: 0, animDur: 3,
+    pad: null,
+    base: opts.clock,
+    clockAt(st) {
+      if (this.phase === 'ann' || this.phase === 'choose') return this.base + (this.phase === 'choose' ? Math.min(3, (st - this.ph0) * 0.4) : 0);
+      if (this.phase === 'run') return this.base + E.clamp((this.run + E.clamp((st - this.runSt) / 1.7, 0, 1)) / 3, 0, 1) * RUN;
+      if (this.phase === 'go') return this.base + this.cost * E.clamp((st - this.ph0) / this.animDur, 0, 1);
+      return this.base + this.cost;
+    },
+    enter() {
+      if (delayed) { E.banner('🚨 열차 지연!', opts.snow ? '폭설로 열차 운행 지연' : '신호 장애로 열차 운행 지연', true); E.sfx.bad(); E.shake(0.3); }
+      else E.banner('노량진역', '열차가 들어오고 있습니다', true);
+    },
+    setChoice(c, st) {
+      this.choice = c; this.ph0 = st; E.sfx.key();
+      if (c === 'taxi') { this.cost = TAXI; this.phase = 'go'; this.animDur = 3; E.setPad(null); }
+      else if (c === 'wait') { this.cost = RIDE + WAIT; this.phase = 'go'; this.animDur = 3.8; E.setPad(null); }
+      else { this.phase = 'run'; this.run = 0; this.runSt = st; this.runRes = []; E.setPad([null, ['↑ 지금!', '초록 칸에서'], null]); }
+    },
+    zone(st) { const p = (st - this.runSt) / 1.7, x = 0.5 + 0.48 * Math.sin(p * Math.PI * 2.4 + this.run * 1.3); return { x, lo: 0.38 + this.run * 0.04, hi: 0.62 - this.run * 0.04 }; },
+    runTap(st, timeout) {
+      const z = this.zone(st), hit = !timeout && z.x >= z.lo && z.x <= z.hi;
+      this.runRes.push(hit); if (!hit) this.misses++;
+      if (hit) { E.sfx.good(this.run + 1); E.pop(E.VW / 2, E.VH * 0.52, RUNS[this.run][1], C.act, 22); } else { E.sfx.bad(); E.pop(E.VW / 2, E.VH * 0.52, timeout ? '놓쳤다…' : '아깝다!', C.hot, 20); }
+      this.run++; this.runSt = st;
+      if (this.run >= 3) { this.cost = RUN + this.misses * RMISS; this.phase = 'go'; this.ph0 = st; this.animDur = 1.6; this.base2 = this.clockAt(st); E.setPad(null); }
+    },
+    update(dt, st) {
+      imMnMornSync(E, this.clockAt(st));
+      if (this.phase === 'ann') {
+        if (st >= (delayed ? 2.4 : 1.2)) {
+          if (delayed) { this.phase = 'choose'; this.ph0 = st; E.setPad([['← 택시', canTaxi ? `−${opts.taxiCost || 4}만` : '통장 부족'], ['↑ 뛰기', '체력−'], ['대기 →', '기다리기 · 무료']]); }
+          else { this.phase = 'go'; this.ph0 = st; this.animDur = 3.2; }
+        }
+      } else if (this.phase === 'choose') { if (st - this.ph0 >= LIM) this.setChoice('wait', st); }
+      else if (this.phase === 'run') { if (st - this.runSt >= 1.7) this.runTap(st, true); }
+      else if (this.phase === 'go') { if (st - this.ph0 >= this.animDur) { this.phase = 'end'; this.ph0 = st; if (this.choice === 'wait' && WAIT >= 20) E.sfx.bad(); } }
+      else if (this.phase === 'end' && st - this.ph0 >= 1.8 && !this.done) { imMnMornSync(E, this.base + this.cost); this.done = true; fin(this.choice === 'taxi' || this.choice === 'none' ? 1 : this.choice === 'run' ? 1 - this.misses / 3 : E.clamp(1 - WAIT / 34, 0, 1), this); }
+    },
+    input(dir, now) {
+      const st = now - this.t0;
+      if (this.phase === 'choose') {
+        if (dir === 'left') { if (!canTaxi) { E.sfx.bad(); E.pop(E.VW / 2, E.VH * 0.6, '통장이 부족해…', C.hot, 16); return; } this.setChoice('taxi', st); }
+        else if (dir === 'up') this.setChoice('run', st); else if (dir === 'right') this.setChoice('wait', st);
+        return;
+      }
+      if (this.phase === 'run') { if (dir === 'up' && st - this.runSt > 0.15) this.runTap(st, false); return; }
+      if (this.phase === 'end' && st - this.ph0 > 0.8) this.ph0 = st - 1.8;
+    },
+    tap(p, now) { if (this.phase === 'run') this.input('up', now); },
+    botStep(mode, now) {
+      const st = now - this.t0; this._bt = (this._bt || 0) + 1;
+      if (this.phase === 'choose' && st - this.ph0 > 0.8) { this.input(mode ? 'right' : canTaxi ? 'left' : 'up', now); return; }
+      if (this.phase === 'run' && st - this.runSt > 0.2) { const z = this.zone(st); if (z.x > z.lo + 0.03 && z.x < z.hi - 0.03) this.input('up', now); return; }
+      if (this.phase === 'end' && this._bt % 30 === 0) this.input('up', now);
+    },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH, bot = VH - E.padV;
+      this.cfg.train = this.phase === 'go' && (this.choice === 'none' || this.choice === 'wait') ? (st - this.ph0 < this.animDur * 0.45 ? 'arrive' : 'stop') : 'none';
+      imMnBG(E, 'station', this, (this.phase === 'go' ? (st - this.ph0) * 4 : 0), now);
+      // 역 천장 띠 (역 이름판 가림)
+      g.fillStyle = '#20243A'; g.fillRect(0, 92, VW, 132); g.fillStyle = '#FFF1C4'; for (let i = 0; i < 4; i++) E.rr(20 + i * VW / 4, 218, 40, 4, 2), g.fill();
+      g.fillStyle = '#FFFFFF'; E.rr(VW / 2 - 90, 194, 180, 22, 4); g.fill(); g.fillStyle = '#2D58A8'; g.fillRect(VW / 2 - 90, 210, 180, 6);
+      g.fillStyle = '#1B2340'; g.font = `13px ${E.FD}`; g.textAlign = 'center'; g.fillText('노량진 → 시험장', VW / 2, 208);
+      const head = this.phase === 'choose' ? `${Math.max(0, Math.ceil(LIM - (st - this.ph0)))}초` : this.choice === 'taxi' ? '택시' : this.choice === 'run' ? '뛰기' : this.choice === 'wait' ? '기다리기' : '정상 운행';
+      imMnMornHead(E, '지하철', this.phase === 'choose' ? 1 - (st - this.ph0) / LIM : null, head, delayed);
+      imMnMornClock(E, this.clockAt(st), dl, 96);
+      // LED 안내 전광판
+      const ly = 158; g.fillStyle = '#0A0C14'; E.rr(12, ly, VW - 24, 30, 6); g.fill();
+      const led = delayed ? (this.phase === 'go' && this.choice === 'wait' ? (st - this.ph0 < this.animDur * 0.5 ? `운행 재개 준비 중… 지연 약 ${WAIT}분` : '열차가 들어오고 있습니다') : opts.snow ? '폭설로 열차 운행이 지연되고 있습니다 · 지연 시간 미정' : '신호 장애로 열차 운행이 지연되고 있습니다 · 지연 시간 미정') : '이번 열차는 용산행 · 정상 운행';
+      g.save(); g.beginPath(); g.rect(16, ly + 2, VW - 32, 26); g.clip();
+      g.font = `15px ${E.FD}`; g.fillStyle = delayed && !(this.phase === 'go' && this.choice === 'wait') ? '#FF5C6C' : '#FF9F6B'; g.textAlign = 'left';
+      const tw = g.measureText(led).width, ox = tw > VW - 40 ? 20 - ((st * 60) % (tw + 60)) : (VW - tw) / 2;
+      g.fillText(led, ox, ly + 21); if (tw > VW - 40) g.fillText(led, ox + tw + 60, ly + 21);
+      g.restore();
+      const midY = Math.min(bot - 230, 360);
+      if (this.phase === 'choose') {
+        const opt = [['←', '택시 타기', canTaxi ? `통장 −${opts.taxiCost || 4}만 · ${TAXI}분 · 확실` : '통장 부족', IM_MN_KEYC.left, !canTaxi], ['↑', '역 밖으로 뛰기', `체력 −${opts.runHp || 8} · 타이밍 3번 · ${RUN}~${RUN + 3 * RMISS}분`, IM_MN_KEYC.up, false], ['→', '그냥 기다리기', '무료 · 지연 시간 운에 맡김', IM_MN_KEYC.right, false]];
+        opt.forEach(([a, t, s, col, dis], k) => {
+          const y = midY + k * 64; g.globalAlpha = dis ? 0.45 : 1;
+          g.fillStyle = '#FFFDF4'; E.rr(16, y, VW - 32, 56, 12); g.fill();
+          g.fillStyle = col; g.beginPath(); g.arc(42, y + 28, 16, 0, 7); g.fill();
+          g.fillStyle = '#12152A'; g.font = `20px ${E.FD}`; g.textAlign = 'center'; g.fillText(a, 42, y + 35);
+          g.textAlign = 'left'; g.fillStyle = '#1B2340'; g.font = `17px ${E.FD}`; g.fillText(t, 68, y + 25);
+          g.fillStyle = '#4A5675'; g.font = `800 11px ${E.FB}`; E.fitText(s, VW - 100, 11, E.FB); g.font = `800 ${Math.min(11, parseFloat(g.font) || 11)}px ${E.FB}`; g.fillText(s, 68, y + 44);
+          g.globalAlpha = 1;
+        });
+      } else if (this.phase === 'run') {
+        const z = this.zone(st), bw = VW - 60, bx = 30, y = midY + 40, lab = RUNS[Math.min(2, this.run)];
+        g.fillStyle = 'rgba(10,12,30,.88)'; E.rr(16, midY - 16, VW - 32, 150, 14); g.fill();
+        g.fillStyle = C.chalk; g.font = `21px ${E.FD}`; g.textAlign = 'center'; g.fillText(`${Math.min(3, this.run + 1)}/3 · ${lab[0]}`, VW / 2, midY + 16);
+        g.fillStyle = 'rgba(255,255,255,.15)'; E.rr(bx, y, bw, 22, 11); g.fill();
+        g.fillStyle = 'rgba(79,214,156,.85)'; E.rr(bx + bw * z.lo, y, bw * (z.hi - z.lo), 22, 8); g.fill();
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(bx + bw * z.x, y + 11, 13, 0, 7); g.fill(); g.font = `14px ${E.FB}`; g.fillText('🏃', bx + bw * z.x, y + 16);
+        this.runRes.forEach((h, j) => { g.fillStyle = h ? C.act : C.hot; g.font = `16px ${E.FD}`; g.fillText(h ? '○' : '✕', VW / 2 - 30 + j * 30, y + 66); });
+        g.fillStyle = C.ink2; g.font = `800 11.5px ${E.FB}`; g.fillText('↑ 를 초록 칸에서!', VW / 2, y + 96);
+      } else if (this.phase === 'ann') {
+        const y = midY + 30; g.fillStyle = 'rgba(10,12,30,.86)'; E.rr(16, y, VW - 32, 76, 14); g.fill(); g.textAlign = 'center';
+        g.fillStyle = delayed ? C.hot : C.chalk; g.font = `22px ${E.FD}`; g.fillText(delayed ? '🚨 열차가 안 온다…' : '🚇 열차 도착', VW / 2, y + 34);
+        g.fillStyle = C.ink; g.font = `800 12.5px ${E.FB}`; g.fillText(delayed ? '전광판에 빨간 글씨. 사람들이 웅성거린다.' : `정상 운행 · 이동 ${RIDE}분`, VW / 2, y + 58);
+      } else {
+        // 진행 / 결과 띠
+        const y = midY + 30; g.fillStyle = 'rgba(10,12,30,.86)'; E.rr(16, y, VW - 32, 92, 14); g.fill();
+        g.textAlign = 'center';
+        const big = this.choice === 'taxi' ? '🚕 택시!' : this.choice === 'run' ? `🏃 뛰었다 · ${3 - this.misses}/3` : this.choice === 'wait' ? '🚉 기다리는 중…' : '🚇 열차 탑승';
+        g.fillStyle = C.chalk; g.font = `24px ${E.FD}`; E.fitText(big, VW - 60, 24, E.FD); g.fillText(big, VW / 2, y + 38);
+        const sub = this.choice === 'taxi' ? `미터기 ${(4800 + Math.floor(E.clamp((st - this.ph0) / this.animDur, 0, 1) * 15000 / 100) * 100).toLocaleString('ko-KR')}원 · 정문 앞까지` : this.choice === 'run' ? `${this.cost}분 · 체력 −${opts.runHp || 8}` : this.choice === 'wait' ? (this.phase === 'end' ? `지연 ${WAIT}분 · 이동 ${RIDE}분` : '전광판만 보고 있다…') : `이동 ${RIDE}분 · 역에서 시험장까지 걸어서`;
+        g.fillStyle = C.ink; g.font = `800 13px ${E.FB}`; E.fitText(sub, VW - 60, 13, E.FB); g.font = `800 ${Math.min(13, parseFloat(g.font) || 13)}px ${E.FB}`; g.fillText(sub, VW / 2, y + 68);
+      }
+    },
+  };
+  return m;
+}
+
+/* ---- 15f. 시험장 착각: 「여기가 아니다!」 ← 순찰차 도움 / → 뛰어가기 (m.choice = 'police' | 'dash') ---- */
+function imVenueMini(E, opts = {}) {
+  const fin = imMnFin(E, opts), C = E.C, dl = opts.dl, POL = opts.police || 9, DASH = opts.dash || 14;
+  const item = { q: '시험장이 아니다!', opts: ['순찰차에 도움 요청', '지도 앱 보고 뛰어가기'], subs: [`+${POL}분`, `+${DASH}분 · 체력−`], ans: -1 };
+  const m = imMnChoiceMini(E, {
+    fin, title: '시험장 착각', banner: '여기가 아니다!', bannerSub: '같은 이름, 다른 학교…', bg: 'station', style: 'tense', barColor: C.hr, bpm: 120, items: [item], time: 7, endHold: 1.8, noFail: true, neutral: true,
+    scene: { train: 'none', me: false },
+    padLabel: (it, k) => (k === 0 ? ['← 경찰', `순찰차 +${POL}분`] : ['뛰기 →', `+${DASH}분`]),
+    onTimeout: () => 1,
+    botPick: () => 0,
+    onPick(mm, idx) { mm.choice = idx === 0 ? 'police' : 'dash'; mm.add = idx === 0 ? POL : DASH; },
+    score: (mm) => (mm.choice === 'police' ? 1 : 0.5),
+    headText: () => '🌅 시험날 아침 · 시험장 착각',
+    drawBody(mm, st) {
+      const g = E.g, VW = E.VW, cl = opts.clock + (mm.phase === 'end' ? mm.add || 0 : 0);
+      imMnMornSync(E, cl);
+      const sky = g.createLinearGradient(0, 0, 0, E.VH * 0.6); sky.addColorStop(0, '#6E95C8'); sky.addColorStop(1, '#F6D7C3'); g.fillStyle = sky; g.fillRect(0, 0, VW, E.VH);
+      imMnMornClock(E, cl, dl, 96);
+      const ct = mm.cardsTop || E.VH * 0.6, h = Math.min(300, ct - 210), y = ct - h - 50;
+      g.fillStyle = '#B8B4AA'; g.fillRect(0, y + h, VW, E.VH);
+      // 교문 + 안내문
+      g.fillStyle = '#C9C2B4'; g.fillRect(0, y + h * 0.35, VW, h * 0.65);
+      g.fillStyle = '#8A8070'; g.fillRect(VW / 2 - 92, y + 10, 18, h - 10); g.fillRect(VW / 2 + 74, y + 10, 18, h - 10);
+      g.fillStyle = '#2B3156'; E.rr(VW / 2 - 100, y, 200, 28, 6); g.fill(); g.fillStyle = '#fff'; g.font = `14px ${E.FD}`; g.textAlign = 'center'; g.fillText(opts.school || '○○고등학교', VW / 2, y + 20);
+      g.save(); g.translate(VW / 2, y + h * 0.62); g.rotate(0.03);
+      g.fillStyle = '#FFFDF4'; E.rr(-112, -48, 224, 96, 6); g.fill(); g.strokeStyle = '#C62828'; g.lineWidth = 3; E.rr(-112, -48, 224, 96, 6); g.stroke();
+      g.fillStyle = '#C62828'; g.font = `17px ${E.FD}`; g.fillText('안 내', 0, -24);
+      g.fillStyle = '#1B2340'; g.font = `800 12px ${E.FB}`;
+      E.wrapText(opts.notice || '임용시험 제1차 시험장은 ○○고등학교 「제2캠퍼스」입니다 (도보 15분)', 200, `800 12px ${E.FB}`, 3).forEach((l, j) => g.fillText(l, 0, -2 + j * 16));
+      g.restore();
+      const t = mm.phase === 'end' ? (mm.choice === 'police' ? '경찰관: "타요! 수험생이죠?" 사이렌 ON' : '지도 앱을 보며 전력질주…') : '같은 이름, 다른 학교. 손이 떨린다.';
+      g.fillStyle = 'rgba(10,12,30,.85)'; E.rr(20, y + h + 4, VW - 40, 32, 10); g.fill(); g.fillStyle = C.ink; g.font = `15px ${E.FD}`; E.fitText(t, VW - 60, 15, E.FD); g.fillText(t, VW / 2, y + h + 26);
+    },
+  });
+  m.choice = null; m.add = 0; m.morning = true; m.kind = 'venue';
+  m.botStep = function () { this._bt = (this._bt || 0) + 1; if (this._bt % 22 === 0) this.auto(); };
+  return m;
+}
+
+/* ---- 15g. 교문: 'ok' 입실 완료 · 'near' 아슬아슬 입실 · 'late' 시험장 문이 닫혔다 ---- */
+function imGateMini(E, opts = {}) {
+  const fin = imMnFin(E, opts), C = E.C, res = opts.res || 'ok', dl = opts.dl, clock = opts.clock, late = res === 'late', near = res === 'near';
+  const HOLD = late ? 6.2 : 4.6, lab = opts.stage === 2 ? '2차 시험장' : '제1차 시험장';
+  const m = {
+    type: 'imMorning', kind: 'gate', bpm: late ? 80 : 120, style: late ? null : near ? 'urgent' : null, cfg: {}, noFail: true, morning: true, res, clanged: false,
+    pad: [null, ['↑ 계속', ''], null],
+    enter() { if (late) E.musicStop(); E.banner(late ? `${E.hm(clock)}…` : near ? '아슬아슬!' : '도착!', late ? '교문이 닫힌다' : near ? `입실 마감 ${E.hm(dl)} 직전` : '여유 있게 입실', true); },
+    update(dt, st) {
+      imMnMornSync(E, clock);
+      if (late && !this.clanged && st > 2.1) { this.clanged = true; E.sfx.over(); E.shake(0.6); }
+      if (near && !this.clanged && st > 1.5) { this.clanged = true; E.sfx.good(3); }
+      if (st >= HOLD && !this.done) { this.done = true; fin(late ? 0 : near ? 0.6 : 1, this); }
+    },
+    input(dir, now) { const st = now - this.t0; if (st > 2.8) this.t0 = now - HOLD; },
+    tap(p, now) { this.input('up', now); },
+    botStep(mode, now) { this._bt = (this._bt || 0) + 1; if (this._bt % 40 === 0) this.input('up', now); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH, bot = VH - E.padV, snow = opts.stage === 2;
+      const G0 = bot - 210, wallTop = G0 - 74, gl = VW / 2 - 70, gr = VW / 2 + 70;
+      // 새벽 하늘 (2차 = 1월, 눈)
+      const sky = g.createLinearGradient(0, 0, 0, G0); sky.addColorStop(0, snow ? '#6F80A3' : '#6E95C8'); sky.addColorStop(1, snow ? '#D9DEE8' : '#F6D7C3');
+      g.fillStyle = sky; g.fillRect(0, 0, VW, VH);
+      // 학교 건물 + 현수막
+      const bt = Math.max(170, wallTop - 300);
+      g.fillStyle = '#E8DCC2'; g.fillRect(24, bt, VW - 48, wallTop - bt + 10); g.fillStyle = '#B99A70'; g.fillRect(18, bt - 10, VW - 36, 12);
+      const rows = Math.floor((wallTop - bt - 70) / 46);
+      g.fillStyle = '#9DB8D8'; for (let r = 0; r < rows; r++) for (let c = 0; c < 6; c++) { if (r === 0 && (c === 2 || c === 3)) continue; g.fillRect(40 + c * ((VW - 80) / 6), bt + 66 + r * 46, (VW - 80) / 6 - 14, 26); }
+      // 건물 시계 (지금 시각)
+      const cx = VW / 2, cy = bt + 32; g.fillStyle = '#FFFDF4'; g.beginPath(); g.arc(cx, cy, 22, 0, 7); g.fill(); g.strokeStyle = '#2B3156'; g.lineWidth = 3; g.stroke();
+      const hA = ((clock / 60) % 12) / 12 * Math.PI * 2 - Math.PI / 2, mA = (clock % 60) / 60 * Math.PI * 2 - Math.PI / 2;
+      g.strokeStyle = '#1B2340'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(hA) * 11, cy + Math.sin(hA) * 11); g.stroke();
+      g.strokeStyle = late ? '#C62828' : '#1B2340'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(mA) * 17, cy + Math.sin(mA) * 17); g.stroke();
+      const by2 = bt + 66 + 46 - 6; g.fillStyle = '#FFFDF4'; E.rr(VW / 2 - 140, by2, 280, 40, 4); g.fill(); g.strokeStyle = '#C62828'; g.lineWidth = 2; E.rr(VW / 2 - 140, by2, 280, 40, 4); g.stroke();
+      g.textAlign = 'center'; g.fillStyle = '#2B3156'; g.font = `800 11px ${E.FB}`; g.fillText(`${lab} · 2027학년도 교사 임용시험`, VW / 2, by2 + 15);
+      g.fillStyle = '#C62828'; g.font = `14px ${E.FD}`; g.fillText('수험생 여러분, 힘내세요!', VW / 2, by2 + 33);
+      // 담장 · 운동장 · 문기둥 (세로 학교 이름판)
+      g.fillStyle = '#A8A090'; g.fillRect(0, wallTop, VW, G0 - wallTop); g.fillStyle = '#8A8070'; for (let x = 0; x < VW; x += 26) g.fillRect(x, wallTop, 2, G0 - wallTop);
+      g.fillStyle = '#C9B48E'; g.fillRect(gl, wallTop, gr - gl, G0 - wallTop);
+      E.drawFront(VW / 2 + (late ? 0 : 34), G0 - 4, 0.48, { body: '#3A4A6B', hair: '#1A1A1A', mood: 'calm', pose: late ? 'idle' : 'point', long: false, glasses: false });
+      const closeK = late ? E.clamp((st - 0.9) / 1.2, 0, 1) : near ? 0.55 + 0.15 * E.clamp(st / 1.5, 0, 1) : 0, half = (gr - gl) / 2, w = half * closeK;
+      [[gl, 1], [gr, -1]].forEach(([x0, sgn]) => {
+        const x = sgn > 0 ? x0 : x0 - w; if (w < 1) return;
+        g.fillStyle = 'rgba(40,44,60,.92)'; g.fillRect(x, wallTop + 4, w, G0 - wallTop - 4);
+        g.fillStyle = '#6A7080'; for (let k = 5; k < w; k += 11) g.fillRect(x + k, wallTop + 4, 3, G0 - wallTop - 4); g.fillRect(x, wallTop + 4, w, 4); g.fillRect(x, G0 - 10, w, 4);
+      });
+      g.fillStyle = '#6B6458'; g.fillRect(gl - 22, wallTop - 26, 22, G0 - wallTop + 26); g.fillRect(gr, wallTop - 26, 22, G0 - wallTop + 26);
+      g.fillStyle = '#FFFDF4'; g.fillRect(gl - 18, wallTop - 20, 14, 86); g.fillStyle = '#1B2340'; g.font = `11px ${E.FD}`;
+      [...(opts.school ? String(opts.school).replace(/^\S+\s/, '') : '○○고등학교').slice(0, 6)].forEach((ch, n) => g.fillText(ch, gl - 11, wallTop - 6 + n * 13));
+      // 보도 + 눈
+      g.fillStyle = '#B8B4AA'; g.fillRect(0, G0, VW, VH - G0); g.fillStyle = 'rgba(0,0,0,.07)'; for (let y = G0 + 22; y < VH; y += 30) g.fillRect(0, y, VW, 2); for (let x = 20; x < VW; x += 46) g.fillRect(x, G0, 2, VH - G0);
+      if (snow) { g.fillStyle = 'rgba(255,255,255,.9)'; for (let n = 0; n < 46; n++) { const x = (n * 97 + st * 18 * (1 + (n % 3))) % VW, y = (n * 53 + st * 36 * (1 + (n % 2))) % bot; g.beginPath(); g.arc(x, y, 1.4 + (n % 3), 0, 7); g.fill(); } }
+      // 나 (뒷모습 → 교문으로 / 지각이면 멈춰 섬)
+      const me = E.GAME.me ? E.GAME.me(E) : {}, runIn = near ? E.clamp((st - 0.5) / 1.4, 0, 1) : !late ? E.clamp((st - 0.3) / 1.6, 0, 1) : 0;
+      const px = VW / 2 + (late ? 0 : near ? 20 * (1 - runIn) : -20), py = late ? G0 + 120 - E.clamp(st / 1.6, 0, 1) * 50 : G0 + 120 - runIn * 110;
+      g.save(); g.translate(px, py); g.scale(2.4, 2.4);
+      E.drawPerson(0, 0, late && st > 3.2 ? 'down' : 'up', me.body || '#4A5BB0', me.hair || '#2B2233', late ? (st < 1.6 ? st : 0) : runIn < 1 ? st : 0, { pony: me.pony, bag: '#3A4A7A' });
+      g.restore();
+      // 말풍선 (감독관)
+      if (late && st > 2.3) E.bubble(VW / 2, wallTop + 22, '감독관', '입실 시간이 지났습니다.', '#FFFDF4');
+      else if (near && st > 0.4 && st < 3.4) E.bubble(VW / 2 + 30, wallTop + 22, '감독관', '빨리요! 지금 들어오세요!', '#FFFDF4');
+      else if (!late && !near && st > 0.6) E.bubble(VW / 2 + 30, wallTop + 22, '감독관', '수험표랑 신분증 보여 주세요.', '#FFFDF4');
+      // 시계 · 제목 판
+      imMnMornHead(E, late ? '입실 마감' : near ? '아슬아슬' : '입실', null, E.hm(clock), late || near);
+      imMnMornClock(E, clock, dl, 96);
+      const ty = bot - 52, tk = E.clamp((st - (late ? 2.6 : 1)) / 0.35, 0, 1);
+      g.globalAlpha = tk; g.fillStyle = 'rgba(10,12,30,.9)'; E.rr(14, ty - 34, VW - 28, 76, 14); g.fill();
+      g.strokeStyle = late ? C.hot : near ? C.chalk : C.act; g.lineWidth = 2; E.rr(14, ty - 34, VW - 28, 76, 14); g.stroke();
+      const title = late ? '시험장 문이 닫혔다' : near ? `아슬아슬 입실 · ${E.hm(clock)}` : `입실 완료 · ${E.hm(clock)}`;
+      g.fillStyle = late ? C.hot : near ? C.chalk : C.act; g.textAlign = 'center'; E.fitText(title, VW - 60, 26, E.FD); g.fillText(title, VW / 2, ty);
+      const sub = late ? `입실 마감 ${E.hm(dl)} · ${Math.round(clock - dl)}분 늦었다` : near ? '심장이 터질 것 같다. 숨부터 고르자.' : `${opts.name ? opts.name + ', ' : ''}화장실 다녀올 시간까지 있다.`;
+      g.fillStyle = C.ink; g.font = `800 12.5px ${E.FB}`; E.fitText(sub, VW - 60, 12.5, E.FB); g.font = `800 ${Math.min(12.5, parseFloat(g.font) || 12.5)}px ${E.FB}`; g.fillText(sub, VW / 2, ty + 26);
+      g.globalAlpha = 1;
+    },
+  };
+  return m;
+}
+
 /* ===== im-core.js ===== */
 /* =====================================================================
    im-core.js — 노량진 D-day 캠페인 (트랙 선택 · 한 달 = 하루 · 게이지/경제 · 사건 · 시험 · 발표 · 엔딩)
@@ -4814,10 +5376,10 @@ function imSchedFor(E, mi) {
     const parts = ex.kind === 'exam1' ? imExam1Parts(E) : imExam2Parts(E);
     const tms = ex.kind === 'exam1' ? imPartTimes(E, parts) : exParts.slice(0, parts.length).map((b) => ({ s: E.T(b.at), e: E.T(b.at) + (b.len || 60) }));
     const end = tms.length ? Math.max(...tms.map((x) => x.e)) : E.T(ex.at) + 360;
-    Object.assign(ex, { title: ex.kind === 'exam1' ? '1차 시험' : '2차 시험', sub: ex.kind === 'exam1' ? `${parts.length}교시 · 시험장` : `${parts.length}과목 · 시험장`, len: end - E.T(ex.at), loc: 'station', lead: 70, grace: 35 });
+    Object.assign(ex, { title: ex.kind === 'exam1' ? '1차 시험' : '2차 시험', sub: ex.kind === 'exam1' ? `${parts.length}교시 · 입실 마감 ${E.hm(imDeadline(E, 1))}` : `${parts.length}과목 · 입실 마감 ${E.hm(imDeadline(E, 2))}`, len: end - E.T(ex.at), loc: 'station', lead: 70, grace: 35 });
     if (ex.kind === 'exam1' && !S.applied) L.splice(L.indexOf(ex), 1);
-    // 시험 날 오후 블록은 시험 뒤로
-    L.forEach((x) => { if (x !== ex && E.T(x.at) < end && E.T(x.at) > E.T(ex.at)) x.drop = true; });
+    // 시험 날 오후 블록은 시험 뒤로 · 입실 전 준비 블록은 시험날 아침(imMorning)이 대신
+    L.forEach((x) => { if (x !== ex && E.T(x.at) < end && E.T(x.at) > E.T(ex.at)) x.drop = true; if (x !== ex && x.kind === 'event' && E.T(x.at) < E.T(ex.at)) x.drop = true; });
   }
   const out = L.filter((x) => !x.drop);
   // 초등 특수: 일초 강의 뒤 특학 연강
@@ -5092,6 +5654,7 @@ function imRunEvent(E, id) {
   if (ev.only === 'practice' && !imIsPractice(t)) return;
   const fk = `ev:${id}:${S.nth}:${S.mi}`;
   if (S.flags[fk]) return;
+  if ((id === 'sleepless' && S.mi === IM_MI.EXAM1) || (id === 'dadText' && S.mi === IM_MI.EXAM2)) return; // 시험날 아침(전날 밤 · 가족 문자)에 녹아 있음
   S.flags[fk] = 1;
   if ((ev.only === 'e' || ev.only === 's') && ev.only !== (imLevel(t) === '초등' ? 'e' : 's')) return;
   // 특수 처리
@@ -5235,6 +5798,206 @@ function imExam2Start(E, s) {
     E.say([{ who: '나', text: '끝났다. 진짜로, 다 끝났다.' }, { who: '나', text: '…이제 2월 발표만 남았어.' }]);
   });
 }
+/* ---------- 11b. 시험날 아침 — 전날 밤 · 늦잠 · 준비물 · 지하철 · 시험장 착각 → 입실 마감 ---------- */
+// 시간(분): 알람 06:40 → 세수·옷·아침 25 → 준비물 5 (+수험표·신분증 두고 나오면 되돌아가기 8) → 역까지 8 → 지하철+도보 40 → 시험실 5 ≈ 08:03 (여유 27분)
+// 늦잠(전날 밤 '한 번 더' · 체력↓ · 번아웃↑ · 멘탈↓) + 지하철 지연(택시 / 뛰기 / 기다리기) + 시험장 착각(답사 안 했으면 드물게)이 쌓이면 마감을 넘긴다.
+// 운은 저장마다 고정된 시드(수험번호 · 트랙 · 회차 · 연도 · 단계) — Math.random 안 씀.
+// 봇·테스트: window.__im.examMode = 'late' | 'near' (늦잠 · 지연 강제, 착각 없음) · window.__im.examForce = { oversleep, delay, wait, venue }
+const IM_MORN = { alarm: '06:40', ready: 25, pack: 5, walk: 8, ride: 40, find: 5, taxi: 30, taxiCost: 4, run: 32, runMiss: 7, runHp: 8, detour: 8, detour2: 2, pen: 3, police: 9, dash: 14, dashHp: 5, near: 5 };
+function imSeed(str) { // FNV-1a → mulberry32 한 번 → 0..1
+  let h = 2166136261;
+  for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  let t = (h + 0x6D2B79F5) | 0; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const imMornRoll = (S, stage, key) => imSeed(`${S.examNo || '0000'}|${S.track}|${S.nth}|${S.year}|${stage}|${key}`);
+const imMornMode = () => { const w = typeof window !== 'undefined' ? window.__im : null; return (w && w.examMode) || null; };
+const imMornForce = () => { const w = typeof window !== 'undefined' ? window.__im : null; return (w && w.examForce) || {}; };
+function imDeadline(E, stage) { const t = imTrackOf(E), x = (stage === 2 ? t.exam2 : t.exam1) || {}, v = x.entry || x.checkIn || x.deadline; return E.T(typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v) ? v : '08:30'); }
+// 오늘 아침이 시험날 아침이면 단계(1 · 2)
+function imMornStage(E, mi) { const S = E.G.S; if (mi === IM_MI.EXAM1 && S.applied && !S.exam1) return 1; if (mi === IM_MI.EXAM2 && S.exam1 && S.exam1.pass && !S.exam2) return 2; return 0; }
+// 이번 달 밤이 시험 전날 밤이면 단계 (10월 → 1차 · 12월 → 2차)
+function imEveStageNext(E) { const S = E.G.S; if (S.mi === IM_MI.APPLY && S.applied) return 1; if (S.mi === IM_MI.RES1 && S.exam1 && S.exam1.pass) return 2; return 0; }
+function imEveApply(E, stage, ch) {
+  const S = E.G.S;
+  if (S.flags['eve' + stage]) return;
+  S.flags['eve' + stage] = ch;
+  if (ch === 'cram') {
+    const n = imGain(E, stage === 2 && S.sk.s2 != null ? 's2' : imWeakest(E), 2.5);
+    imApply(E, { hp: -6, mental: -2 }, '', true);
+    E.toast(`마지막으로 한 번 더 · 실력 +${n.toFixed(1)} · 늦잠 위험 ↑`, 'bad');
+    imAlbum(E, '📖', `${stage}차 시험 전날, 목차 한 번 더`);
+  } else {
+    imApply(E, { hp: 6, mental: 4 }, '', true);
+    E.toast('일찍 자기 · 체력 +6 · 멘탈 +4', 'ok');
+    imAlbum(E, '🌙', `${stage}차 시험 전날, 일찍 불 끄기`);
+  }
+}
+function imEveRun(E, stage, flashback, done) {
+  const S = E.G.S;
+  const m = imMini(E, 'imEveMini', { stage, flashback, name: S.name || '', alarm: IM_MORN.alarm, time: flashback || !E.G.D ? null : E.hm(E.G.min % 1440), dl: E.hm(imDeadline(E, stage)), onEnd: (sc, mm) => imEveApply(E, stage, mm && mm.choice === 'cram' ? 'cram' : 'early') }, () => E.cardMini('시험 전날 밤', '일찍 자기', null, 'gosiwon', 3));
+  E.runMinis([m], () => { if (!S.flags['eve' + stage]) imEveApply(E, stage, 'early'); if (done) done(); });
+}
+function imMornItems(E, stage) {
+  const S = E.G.S;
+  const need = [
+    { id: 'ticket', t: '수험표', icon: '🎫', need: true, miss: '되돌아감 +8분' },
+    { id: 'id', t: '신분증', icon: '🪪', need: true, miss: '되돌아감 +8분' },
+    { id: 'pen', t: '검정 펜', icon: '🖊️', need: true, miss: '편의점 +3분' },
+    { id: 'tape', t: '수정테이프', draw: 'tape', need: true, miss: '멘탈 −1' },
+    { id: 'watch', t: '아날로그 시계', icon: '🕘', need: true, miss: '멘탈 −3' },
+  ];
+  const decoy = stage === 2
+    ? [{ id: 'smart', t: '스마트워치', icon: '⌚', bad: '제출 · 멘탈 −2' }, { id: 'jacket', t: '대학 과잠', icon: '🧥', sub: '등에 커다란 학교 이름', bad: '블라인드 위반 위험 · 멘탈 −3' }, { id: 'calc', t: '전자계산기', draw: 'calc', bad: '제출 · 멘탈 −2' }]
+    : [{ id: 'smart', t: '스마트워치', icon: '⌚', bad: '제출 · 멘탈 −2' }, { id: 'calc', t: '전자계산기', draw: 'calc', bad: '제출 · 멘탈 −2' }, { id: 'book', t: '두꺼운 교과서', icon: '📕', sub: '3kg', bad: '가방 무거움 · 체력 −3' }];
+  const out = need.concat(decoy).map((x) => ({ x, k: imMornRoll(S, stage, 'pack:' + x.id) })).sort((a, z) => a.k - z.k).map((o) => o.x);
+  if (!out[0].need) { const j = out.findIndex((x) => x.need); [out[0], out[j]] = [out[j], out[0]]; } // 첫 칸부터 함정은 X
+  return out;
+}
+function imMornMsgs(E, stage) {
+  const v = imVoc(E.G.S);
+  if (stage === 2) return [{ who: '아빠', text: '밥 먹어라.' }, { who: '아빠', text: '아빠는 니가 자랑스럽다.' }, { who: '엄마', text: `${v}, 오늘도 잘 봐! 이름이랑 학교는 말하면 안 되는 거 알지? 😄` }, { me: true, text: '응! 다녀올게 💪' }];
+  return [{ who: '엄마', text: `${v}, 시험 잘 봐! 🍀` }, { who: '엄마', text: '아침 꼭 먹고, 따뜻한 물 챙겨 가.' }, { who: '엄마', text: '떨리면 숨 크게 세 번. 엄마가 기도할게.' }, { me: true, text: '응 엄마, 다녀올게!' }];
+}
+function imMorning(E, stage) {
+  const S = E.G.S, D = E.G.D, mode = imMornMode(), F = imMornForce(), roll = (k) => imMornRoll(S, stage, k);
+  const dl = imDeadline(E, stage);
+  const M = D.morning = { stage, dl, clock: E.T(IM_MORN.alarm), log: [], over: 0, forgot: [], decoys: [], transit: null, venue: null };
+  const step = (txt, add = 0) => { M.log.push(`${E.hm(M.clock)} ${txt}${add ? ` (+${add}분)` : ''}`); M.clock += add; };
+  const seq = [];
+  if (!S.flags['eve' + stage]) seq.push((next) => imEveRun(E, stage, true, next)); // 전날 밤을 못 골랐으면(첫 달 · 밤샘) 회상으로
+  // 1. 🔔 늦잠
+  seq.push((next) => {
+    const cram = S.flags['eve' + stage] === 'cram';
+    M.overP = Math.min(0.85, 0.05 + (cram ? 0.4 : 0) + (S.hp < 40 ? 0.15 : 0) + (S.burnout >= 60 ? 0.15 : 0) + (S.mental < 30 ? 0.08 : 0));
+    const over = F.oversleep != null ? !!F.oversleep : mode ? true : roll('oversleep') < M.overP;
+    E.G.min = M.clock;
+    if (!over) { step('알람 한 번에 기상'); return next(); }
+    const snooze = cram ? 16 : 10;
+    let res = null;
+    const mini = imMini(E, 'imAlarmMini', { clock: M.clock, dl, snooze, stage, onEnd: (sc, m) => { res = m; } }, () => E.cardMini('늦잠!', '총무님 노크에 겨우 깼다', 'urgent', 'gosiwon', 3));
+    E.runMinis([mini], () => {
+      const lost = res && res.lost != null ? res.lost : snooze + 25;
+      M.over = lost; step(res && res.woke ? '늦잠! 연타로 기상' : '늦잠… 총무님 노크에 기상', lost);
+      imAlbum(E, '⏰', `${E.hm(M.clock)} 늦잠! "일어나!!"`);
+      next();
+    });
+  });
+  // 2. 준비 + 가족 문자 (엄마 「시험 잘 봐」)
+  seq.push((next) => {
+    E.runMinis([imMini(E, 'imReadyMini', { clock: M.clock, dl, add: IM_MORN.ready, stage, over: M.over > 0, msgs: imMornMsgs(E, stage), room: stage === 2 ? '가족 💛 (3)' : '엄마 💛' }, () => E.cardMini('준비', '세수 · 옷 · 가방', null, 'gosiwon', 3))], () => {
+      step('세수 · 옷 · 가족 문자', IM_MORN.ready);
+      imAlbum(E, '📱', stage === 2 ? '"아빠는 니가 자랑스럽다" 가족 단톡' : `"${imVoc(S)}, 시험 잘 봐" 엄마 문자`);
+      next();
+    });
+  });
+  // 3. 🪪 준비물
+  seq.push((next) => {
+    let P = null;
+    E.runMinis([imMini(E, 'imPackMini', { clock: M.clock, dl, items: imMornItems(E, stage), needText: '수험표 · 신분증 · 검정 펜 · 수정테이프 · 아날로그 시계', stage, add: IM_MORN.pack, onEnd: (sc, m) => { P = { missing: m.missing || [], decoys: m.decoys || [] }; } }, () => E.cardMini('준비물', '수험표 · 신분증 · 검정 펜', null, 'gosiwon', 3))], () => {
+      P = P || { missing: [], decoys: [] };
+      step('준비물 챙기기', IM_MORN.pack);
+      const miss = P.missing, dec = P.decoys, back = miss.filter((x) => x === 'ticket' || x === 'id'), nm = { ticket: '수험표', id: '신분증' };
+      if (back.length) { step(`${back.map((x) => nm[x]).join('·')} 두고 나옴 → 되돌아감`, IM_MORN.detour + (back.length > 1 ? IM_MORN.detour2 : 0)); imAlbum(E, '🪪', `${back.map((x) => nm[x]).join('·')} 두고 나와서 다시 고시원으로`); }
+      if (miss.includes('pen')) step('편의점에서 검정 펜', IM_MORN.pen);
+      const eff = {};
+      const addEff = (k, n) => { eff[k] = (eff[k] || 0) + n; };
+      if (miss.includes('watch')) addEff('mental', -3);
+      if (miss.includes('tape')) addEff('mental', -1);
+      dec.forEach((d) => { if (d === 'book') addEff('hp', -3); else addEff('mental', d === 'jacket' ? -3 : -2); });
+      if (eff.mental || eff.hp) imApply(E, eff, '준비물');
+      M.forgot = miss.slice(); M.decoys = dec.slice();
+      if (!miss.length && !dec.length) imAlbum(E, '🎒', '수험표 · 신분증 · 검정 펜 — 가방 완벽');
+      next();
+    });
+  });
+  // 4. 🚇 역까지 + 지하철 (지연이면 택시 · 뛰기 · 기다리기)
+  seq.push((next) => {
+    step('고시원 → 노량진역', IM_MORN.walk);
+    const delayed = F.delay != null ? !!F.delay : mode ? true : roll('delay') < (stage === 2 ? 0.35 : 0.28);
+    let wait = Math.round(6 + roll('wait') * 28);
+    if (F.wait != null) wait = F.wait;
+    else if (mode === 'late') wait = 34;
+    else if (mode === 'near') wait = E.clamp(Math.round(dl - 3 - (M.clock + IM_MORN.ride + IM_MORN.find)), 0, 60);
+    let T0 = null;
+    E.runMinis([imMini(E, 'imSubwayMini', { clock: M.clock, dl, delayed, wait, ride: IM_MORN.ride, taxi: IM_MORN.taxi, taxiCost: IM_MORN.taxiCost, run: IM_MORN.run, runMiss: IM_MORN.runMiss, runHp: IM_MORN.runHp, canTaxi: S.money >= IM_MORN.taxiCost, stage, snow: stage === 2, onEnd: (sc, m) => { T0 = { choice: m.choice || 'wait', cost: m.cost, misses: m.misses || 0 }; } }, () => E.cardMini('지하철', '노량진 → 시험장', null, 'station', 3))], () => {
+      T0 = T0 || { choice: delayed ? 'wait' : 'none', cost: IM_MORN.ride + (delayed ? wait : 0), misses: 0 };
+      M.transit = Object.assign({ delayed, wait }, T0);
+      step({ none: '지하철 정상 운행 + 도보', taxi: '열차 지연 → 택시', run: `열차 지연 → 뛰기 ${3 - T0.misses}/3`, wait: `열차 지연 → 기다리기 (지연 ${wait}분)` }[T0.choice] || '지하철', T0.cost);
+      if (T0.choice === 'taxi') { imMoney(E, -IM_MORN.taxiCost, '시험날 택시'); imAlbum(E, '🚕', '시험날 아침 택시 미터기'); }
+      if (T0.choice === 'run') { E.statAdd('hp', -IM_MORN.runHp); imAlbum(E, '🏃', '열차 지연, 정류장까지 전력질주'); }
+      if (T0.choice === 'wait') imAlbum(E, '🚉', `지연 열차를 기다린 ${wait}분`);
+      next();
+    });
+  });
+  // 5. 🏫 시험장 착각 (드물게 · 미리 가 봤으면 없음)
+  seq.push((next) => {
+    M.venueP = S.flags['scout' + stage] ? 0 : stage === 2 ? 0.12 : 0.15;
+    const hit = F.venue != null ? !!F.venue : mode ? false : roll('venue') < M.venueP;
+    if (!hit || M.clock > dl) return next();
+    let ch = null;
+    E.runMinis([imMini(E, 'imVenueMini', { clock: M.clock, dl, stage, police: IM_MORN.police, dash: IM_MORN.dash, notice: stage === 2 ? '2차 시험 대기실은 ○○중학교 「별관」입니다 · 도보 15분' : '임용시험 제1차 시험장은 ○○고 「제2캠퍼스」입니다 · 도보 15분', onEnd: (sc, m) => { ch = m.choice; } }, () => E.cardMini('시험장 착각!', '여기가 아니다', 'urgent', 'station', 3))], () => {
+      M.venue = ch || 'dash';
+      step(M.venue === 'police' ? '시험장 착각 → 순찰차' : '시험장 착각 → 전력질주', M.venue === 'police' ? IM_MORN.police : IM_MORN.dash);
+      if (M.venue === 'dash') E.statAdd('hp', -IM_MORN.dashHp);
+      imAlbum(E, '🏫', M.venue === 'police' ? '시험장 착각, 순찰차 뒷좌석' : '시험장 착각, 지도 앱 보며 전력질주');
+      next();
+    });
+  });
+  seq.push((next) => { step('교문 → 시험실 찾기', IM_MORN.find); next(); });
+  let i = 0;
+  const go = () => { if (i < seq.length) seq[i++](go); else imMornEnd(E, M); };
+  go();
+}
+function imMornEnd(E, M) {
+  const S = E.G.S, arr = Math.round(M.clock), dl = M.dl;
+  const res = arr > dl ? 'late' : arr >= dl - IM_MORN.near ? 'near' : 'ok';
+  M.arr = arr; M.res = res;
+  S.flags['morn' + M.stage] = { arr: E.hm(arr), dl: E.hm(dl), res, over: M.over, transit: M.transit && M.transit.choice, venue: M.venue, forgot: M.forgot, decoys: M.decoys, log: M.log.slice() };
+  const ex = E.daySched().find((x) => x.kind === (M.stage === 1 ? 'exam1' : 'exam2'));
+  E.G.min = arr;
+  const school = M.stage === 2 ? '○○중학교' : `${S.region || '서울'} ○○고등학교`;
+  E.runMinis([imMini(E, 'imGateMini', { clock: arr, dl, res, stage: M.stage, name: S.name || '', school }, () => E.cardMini(res === 'late' ? '시험장 문이 닫혔다' : '입실', E.hm(arr), res === 'late' ? 'tense' : 'urgent', 'exam', 4))], () => {
+    if (res === 'late') return imMornLate(E, M, ex);
+    if (res === 'near') { imMental(E, -6); E.toast(`아슬아슬 입실 ${E.hm(arr)} · 멘탈 −6`, 'bad'); imAlbum(E, '😮‍💨', `${E.hm(arr)} 아슬아슬 입실`); }
+    else imAlbum(E, '✅', `${E.hm(arr)} 여유 있게 입실`);
+    if (!ex) return;
+    E.markSlot(ex.id, res === 'near' ? 'late' : 'ok');
+    if (M.stage === 1) imExam1Start(E, ex); else imExam2Start(E, ex);
+  });
+}
+// 입실 마감 지남 → 시험장 문이 닫혔다 카드 → 엄마 전화 → 엔딩('late') · N수
+function imMornLate(E, M, ex) {
+  const S = E.G.S, stage = M.stage, arr = E.hm(M.arr), dl = E.hm(M.dl), esc = E.esc, v = imVoc(S);
+  if (ex) E.markSlot(ex.id, 'miss');
+  if (stage === 1) S.exam1 = { score: 0, cut: S.cut, pass: false, late: true, arr, parts: [] };
+  else S.exam2 = { score: 0, total: (S.exam1 || {}).score || 0, cut: 999, pass: false, late: true, arr, parts: [] };
+  S.history.push({ nth: S.nth, stage, late: true, arr });
+  imMental(E, -30);
+  imAlbum(E, '🚪', `${arr} 닫힌 교문`);
+  E.sfx.over(); E.shake(0.5);
+  const who = imName(S) === '나' ? '나' : imName(S);
+  const tag = stage === 1 ? `감독관: 「입실 시간이 지났습니다.」<br>철문 너머로 시험지 넘기는 소리가 들린다.<br>${esc(who)}의 올해 시험은 여기서 멈췄다.` : `감독관: 「입실 시간이 지났습니다.」<br>1차 합격까지 해냈는데, 대기실 문이 먼저 닫혔다.<br>${esc(who)}의 올해 시험은 여기서 멈췄다.`;
+  imCard(E, `<div class="eb">${esc(imMonthLabel(S.mi))} · ${stage}차 시험일 · ${arr}</div><h2>시험장 문이 닫혔다</h2>
+    <p class="tag">${tag}</p>
+    <div class="brief"><div><b>입실 마감 ${dl} · 도착 ${arr} (${M.arr - M.dl}분 늦음)</b></div>${M.log.slice(-7).map((l) => `<div style="font-size:11.5px;font-weight:700;color:var(--ink-2)">${esc(l)}</div>`).join('')}<div>점수 없음 — 올해 수험 생활은 여기까지. 쌓은 실력은 그대로 남는다.</div></div>`, () => {
+    E.runMinis([E.phoneMini('엄마', [[1.5, 'm', '엄마… 나 시험장에 못 들어갔어.'], [4, 'c', `…${v}, 다친 데는 없고?`], [6.6, 'c', '그럼 됐어. 1년 공부한 건 어디 안 가.'], [9.2, 'c', '밥 먹고 천천히 와. 엄마가 기다릴게.'], [11.8, 'm', '…응. 고마워 엄마.']], { end: 14 })], () => imEnding(E, 'late'));
+  });
+}
+// 10월 · 12월 선택 할 일: 노량진역 「시험장 미리 가보기」 → 시험장 착각 위험 없음
+function imScoutQuest(stage) { return { id: 'q-scout' + stage, title: stage === 2 ? '2차 시험장 미리 가보기 (선택)' : '시험장 미리 가보기 (선택)', at: 'station', icon: '🏫', color: IM_COL.info, cat: '선택', dueAt: '23:00' }; }
+function imScout(E, q) {
+  const S = E.G.S, stage = q.id === 'q-scout2' ? 2 : 1;
+  if (stage === 1 && !S.applied) return E.say([{ who: '나', text: '원서부터 내고 시험장 보러 가자.' }]);
+  if (!imTimeOK(E, 30, '시험장 답사')) return;
+  E.runMinis([E.cardMini('시험장 미리 가보기', stage === 2 ? '2차 시험장 · 대기실 가는 길 확인' : '노량진역 → 시험장 · 정문 · 시험실 확인', null, 'station', 5)], () => {
+    imUseTime(E, 70); S.flags['scout' + stage] = true; E.completeQuest(q.id);
+    imApply(E, { hp: -3, mental: 4 }, '시험장 답사');
+    imAlbum(E, '🗺️', stage === 2 ? '2차 시험장 가는 길 답사' : '1차 시험장 정문 앞 답사');
+    E.say([{ who: '나', text: stage === 2 ? '대기실은 본관 2층. 역에서 걸어서 12분.' : '정문은 여기, 시험실은 3층 끝. 역에서 걸어서 9분.' }, { who: '나', text: '이제 시험장 착각할 일은 없다.' }]);
+  });
+}
+
 function imApplyQuest(E, q) {
   const S = E.G.S, t = imTrackOf(E);
   if (S.applied || S.flags.noApply) return E.say([{ who: '채용 시스템', text: S.applied ? '이미 접수되었습니다. (접수번호 캡처 완료)' : '접수 기간이 아닙니다.' }]);
@@ -5314,6 +6077,7 @@ function imOnDayStart(d, E, quiet) {
     imRefresh(E, !!e1.pass, '1차', () => {
       if (!e1.pass) return imEnding(E, e1.noApply ? 'noapply' : 'fail1');
       imAlbum(E, '🎉', '1차 합격 화면 캡처'); imMental(E, 20);
+      if (!S.flags.scout2) { const q = imScoutQuest(2); E.addQuest(Object.assign({}, q, { due: E.dueAt(0, q.dueAt) })); }
       E.say([{ who: '나', text: `1차 합격… ${e1.score}점! 컷 ${e1.cut}.` }, { who: '단톡방', text: '2차 스터디 오늘 바로 시작해요!!' }, { who: '나', text: '면접, 수업실연… 이제 말로 싸운다.' }]);
     });
     return;
@@ -5335,7 +6099,8 @@ function imOnDayStart(d, E, quiet) {
     return;
   }
   const intro = d.intro && d.intro.length ? d.intro.map((l) => (typeof l === 'string' ? { who: '나', text: l } : Object.assign({}, l))) : imDefaultIntro(E, mi);
-  const runIntro = () => { if (intro.length) E.say(intro, () => E.sfx.chime()); };
+  const stage = imMornStage(E, mi); // 시험날: 인트로 → 시험날 아침(늦잠 · 준비물 · 지하철 · 시험장) → 시험
+  const runIntro = () => { if (intro.length) E.say(intro, () => { E.sfx.chime(); if (stage) imMorning(E, stage); }); else if (stage) imMorning(E, stage); };
   const first = S.nth === 1 && mi === (S.startMi || 0);
   if (mi === IM_MI.ARRIVE && S.nth === 1) imAlbum(E, '🧳', '노량진역, 캐리어 두 개');
   else if (first) imAlbum(E, '🧳', `${imStartOf(mi).label} · 캐리어 하나`);
@@ -5459,8 +6224,8 @@ function imDefaultIntro(E, mi) {
 }
 function imMonthIntro(E, mi) {
   const S = E.G.S;
-  if (mi === IM_MI.EXAM1) return [{ who: '나', text: '오늘이다. 수험표, 신분증, 아날로그 시계, 컴퓨터용 사인펜… 아니, 검정 볼펜.' }, { who: '나', text: '노량진역으로 가서 시험장으로!' }];
-  if (mi === IM_MI.EXAM2) return [{ who: '나', text: '2차 시험 날. 구상실 → 평가실. 이름 말하면 안 된다.' }];
+  if (mi === IM_MI.EXAM1) return [{ who: '나', text: `오늘이다. 1차 시험 — 입실 마감 ${E.hm(imDeadline(E, 1))}.` }, { who: '나', text: '수험표, 신분증, 아날로그 시계, 검정 펜. 늦으면 1년이 끝이다.' }];
+  if (mi === IM_MI.EXAM2) return [{ who: '나', text: '2차 시험 날. 구상실 → 평가실. 이름 말하면 안 된다.' }, { who: '나', text: `대기실 입실 마감 ${E.hm(imDeadline(E, 2))}. 오늘 아침만 무사히.` }];
   if (mi === IM_MI.APPLY) return [{ who: '나', text: '원서 접수 마감이 오늘 18시! 내 방 노트북으로 접수부터.' }];
   return [];
 }
@@ -5492,7 +6257,8 @@ function imOnExit(E) {
   imSleep(E);
 }
 function imSleep(E) {
-  const S = E.G.S;
+  const S = E.G.S, up = imEveStageNext(E);
+  if (up && !S.flags['eve' + up]) return imEveRun(E, up, false, () => E.endDay(false)); // 시험 전날 밤: 일찍 자기 vs 한 번 더
   const fin = (sc, m) => {
     if (m && (m.choice === 'study' || m.choice === 0)) { const k = imWeakest(E); imGain(E, k, 2); imApply(E, { hp: -8, mental: -5, burnout: 4 }, '새벽 2시까지 한 문제 더', true); S.flags.allnight = true; }
     else imApply(E, { hp: 6, mental: 3 }, '소등', true);
@@ -5543,6 +6309,7 @@ function imNpcChat(n, E) {
 function imOnQuest(q, it, E) {
   const S = E.G.S;
   if (q.id === 'q-apply') return imApplyQuest(E, q);
+  if (/^q-scout/.test(q.id)) return imScout(E, q);
   if (q.id === 'q-rent') return E.say([{ who: '고시원 총무', text: `${IM_ROOMS[S.room].name}, 이번 달 ${IM_ROOMS[S.room].rent}만 원 받았어요~ 냉장고 이름 꼭 쓰고요!` }], () => { E.completeQuest(q.id); imMental(E, 2); });
   if (q.id === 'q-unpack') return E.say([{ who: '나', text: S.room === 'win' ? '창문이 있다. 하늘이 보인다. 이걸로 버틴다.' : '창문이 없다… 시계를 봐야 아침인지 안다.' }, { who: '나', text: '책상 위에 기본서를 쌓았다. 1년 뒤엔 이 방을 나간다.' }], () => { E.completeQuest(q.id); E.statAdd('hp', 4); });
   if (q.id === 'q-seat') return E.say([{ who: '독서실', text: '고정석 37번. 칸막이에 "합격" 포스트잇을 붙였다.' }], () => { E.completeQuest(q.id); imMental(E, 3); });
@@ -5555,18 +6322,20 @@ function imQuestsFor(E, mi) {
     L.push({ id: 'q-rent', title: '총무님께 월세 내기', at: 'owner', icon: '🏠', color: IM_COL.hr, cat: '생활' });
   }
   if (mi === IM_MI.APPLY && !S.applied) L.push({ id: 'q-apply', title: '1차 원서 접수', at: 'door:room', icon: '📝', color: IM_COL.hot, cat: '마감', dueAt: '18:00' });
+  if (mi === IM_MI.APPLY && !S.flags.scout1 && !S.flags.noApply) L.push(imScoutQuest(1));
   return L;
 }
 function imOnQuestMiss(q, E) {
   const S = E.G.S;
   if (q.id === 'q-apply') {
     S.applied = false; S.flags.noApply = true;
-    E.G.quests = E.G.quests.filter((x) => x.id !== q.id);
+    E.G.quests = E.G.quests.filter((x) => x.id !== q.id && x.id !== 'q-scout1');
     E.sfx.over(); E.shake(0.6);
     imCard(E, `<div class="eb">10월 · 18:00 · 원서 접수 마감</div><h2>마감됐습니다</h2><p class="tag">새로고침해도 「접수 기간이 아닙니다」.<br>1년을 준비했는데, 시험을 볼 수가 없다.</p><div class="brief"><div>올해 1차 응시 불가 → 11월은 시험장 대신 독서실.</div><div>남은 달은 내년(${imNth({ nth: S.nth + 1 })})을 위한 실력으로 남는다.</div></div>`);
     imMental(E, -20);
     return;
   }
+  if (/^q-scout/.test(q.id)) { E.G.quests = E.G.quests.filter((x) => x.id !== q.id); E.toast('시험장 답사는 못 갔다 · 시험날 길만 잘 찾자', ''); return; }
   E.toast(`놓침: ${q.title}`, 'bad');
 }
 
@@ -5627,7 +6396,9 @@ function imDayStats(forced, E) {
   const mock = D.mock ? `${D.mock.rank}/${D.mock.total}` : '-';
   const hrs = ((D.study || 0) / 60).toFixed(1);
   const titleBy = { [IM_MI.EXAM1]: S.exam1 && !S.exam1.noApply ? '1차 시험 끝' : '시험 없는 11월', [IM_MI.EXAM2]: '2차 시험 끝' };
-  const e1 = S.mi === IM_MI.EXAM1 && S.exam1 && !S.exam1.noApply ? `<div class="brief"><div>답안지 제출 완료. 정답은 공개되지 않는다 — 발표는 12월.</div></div>` : '';
+  const mo = S.mi === IM_MI.EXAM1 ? S.flags.morn1 : S.mi === IM_MI.EXAM2 ? S.flags.morn2 : null;
+  const moTxt = mo ? `<div>아침: ${E.esc(mo.arr)} ${mo.res === 'near' ? '아슬아슬 ' : ''}입실 (마감 ${E.esc(mo.dl)})${mo.over ? ` · 늦잠 +${mo.over}분` : ''}${mo.transit && mo.transit !== 'none' ? ` · 지하철 지연 → ${{ taxi: '택시', run: '뛰기', wait: '기다리기' }[mo.transit] || ''}` : ''}</div>` : '';
+  const e1 = S.mi === IM_MI.EXAM1 && S.exam1 && !S.exam1.noApply ? `<div class="brief">${moTxt}<div>답안지 제출 완료. 정답은 공개되지 않는다 — 발표는 12월.</div></div>` : S.mi === IM_MI.EXAM2 && moTxt ? `<div class="brief">${moTxt}</div>` : '';
   return {
     eb: `${d.month} · ${imNth(S)} · ${forced ? (D.burnt ? '번아웃' : '밤샘') : '소등'}`,
     title: titleBy[S.mi] || (D.burnt ? '멈춤' : forced ? '또 밤을 새웠다…' : `${d.month}도 버텼다`),
@@ -5648,9 +6419,11 @@ function imBriefHTML(d, E) {
   if (S.rest) extra.push('번아웃 — 이번 달은 본가에서 쉬어요. (공부 금지)');
   if (mi === IM_MI.TO) extra.push('TO 사전예고가 나오는 달. 컷이 움직인다.');
   if (mi === IM_MI.APPLY) extra.push('⚠ 원서 접수 마감 18:00 — 내 방 노트북에서 접수! 놓치면 올해 응시 불가.');
-  if (mi === IM_MI.EXAM1) extra.push(S.applied ? `08:10 입실! 노량진역 개찰구 → 시험장. ${imExam1Parts(E).map((p) => p.label).join(' → ')}. 늦으면 1년이 끝.` : '원서를 내지 못했다…');
+  if (mi === IM_MI.APPLY) extra.push('선택: 노량진역 「시험장 미리 가보기」 — 시험날 아침 시험장 착각 방지.');
+  if (mi === IM_MI.EXAM1) extra.push(S.applied ? `입실 마감 ${E.hm(imDeadline(E, 1))}! 알람 → 준비물 → 지하철 → 시험장. 늦으면 1년이 끝.` : '원서를 내지 못했다…');
+  if (mi === IM_MI.EXAM1 && S.applied) extra.push(`${imExam1Parts(E).map((p) => p.label).join(' → ')} · 점심시간 없음`);
   if (mi === IM_MI.RES1) extra.push('오전 10시 1차 합격자 발표.');
-  if (mi === IM_MI.EXAM2) extra.push(`08:00 입실! 노량진역 → 2차 시험장. ${imExam2Parts(E).map((p) => p.label).join(' → ')}`);
+  if (mi === IM_MI.EXAM2) extra.push(`대기실 입실 마감 ${E.hm(imDeadline(E, 2))}! 노량진역 → 2차 시험장. ${imExam2Parts(E).map((p) => p.label).join(' → ')}`);
   if (mi === IM_MI.LAST) extra.push('최종 합격자 발표. 1년의 끝.');
   if (imIsPractice(t) && mi >= 1 && mi <= IM_MI.APPLY) extra.push(`실기 교과: 매일 실기 연습 + 레슨·대관비 −${imLessonFee(t)}만.`);
   if (t.id === 'e-sp' && mi >= 1 && mi <= IM_MI.APPLY) extra.push('초등 특수: 일반 초등 교육과정 + 특수교육학 연강.');
@@ -5681,12 +6454,15 @@ function imScore(E) {
 function imFinalHTML(E, o) {
   const S = E.G.S, t = imTrackOf(E), esc = E.esc, e1 = S.exam1, e2 = S.exam2;
   const sn = S.name ? `${S.name} 선생님, ` : '';
-  const K = { pass: ['최종 합격', imLevel(t) === '초등' ? `${sn}3월 1일 발령… 어쩌면 발령 대기. 그래도, 선생님이다.` : `${sn}3월 1일, 교단에 선다.`, '🌸'], fail2: ['2차 탈락', '1차는 붙었다. 마지막 문턱에서 0.몇 점.', '🥀'], fail1: ['1차 탈락', '컷까지 몇 점. 정답은 끝내 공개되지 않았다.', '🍂'], noapply: ['응시하지 못한 해', '원서 마감을 놓친 1년. 실력은 남았다.', '🗓️'] }[S.final] || ['수험 생활 끝', '', '📷'];
+  const K = { pass: ['최종 합격', imLevel(t) === '초등' ? `${sn}3월 1일 발령… 어쩌면 발령 대기. 그래도, 선생님이다.` : `${sn}3월 1일, 교단에 선다.`, '🌸'], fail2: ['2차 탈락', '1차는 붙었다. 마지막 문턱에서 0.몇 점.', '🥀'], fail1: ['1차 탈락', '컷까지 몇 점. 정답은 끝내 공개되지 않았다.', '🍂'], noapply: ['응시하지 못한 해', '원서 마감을 놓친 1년. 실력은 남았다.', '🗓️'],
+    late: (e2 && e2.late) ? ['2차 대기실 문 앞에서', `1차 합격까지 해냈다. ${e2.arr}, 마지막 아침에 문이 먼저 닫혔다. 그래도 실력은 남았다.`, '🚪'] : ['시험장 문 앞에서 멈춘 해', `${(e1 && e1.arr) || '08:3x'}, 교문이 닫혔다. 1년이 사라진 게 아니다 — 쌓은 실력은 그대로 남았다.`, '🚪'] }[S.final] || ['수험 생활 끝', '', '📷'];
   const alb = S.album.filter((a) => a.nth === S.nth), album = alb.length > 9 ? alb.slice(0, 3).concat(alb.slice(-6)) : alb;
   const pol = album.map((a, i) => `<div style="background:#FFFDF4;color:#1B2340;border-radius:4px;padding:6px 5px 8px;box-shadow:0 4px 10px rgba(0,0,0,.35);transform:rotate(${((i * 37) % 9) - 4}deg)"><div style="background:#2A3358;border-radius:2px;height:46px;display:grid;place-items:center;font-size:26px">${a.icon}</div><div style="font-size:9.5px;font-weight:800;margin-top:4px;line-height:1.25">${esc(a.text)}</div><div style="font-size:8.5px;color:#6A7393">${esc(a.label)}</div></div>`).join('');
   const rows = [];
-  if (e1 && !e1.noApply) rows.push(`<div>1차 ${e1.score}점 / 컷 ${e1.cut}${e1.fail40 ? ' · 과락' : ''} — ${e1.parts.map((p) => `${esc(p.label)} ${p.got}/${p.pts}`).join(' · ')}</div>`);
-  if (e2) rows.push(`<div>2차 ${e2.score}점 · 합계 ${e2.total} / 최종 컷 ${e2.cut} — ${e2.parts.map((p) => `${esc(p.label)} ${p.got}/${p.pts}`).join(' · ')}</div>`);
+  if (e1 && e1.late) rows.push(`<div>1차 — 입실 마감 ${esc((S.flags.morn1 || {}).dl || '08:30')} · 도착 ${esc(e1.arr)} · 응시 못 함</div>`);
+  else if (e1 && !e1.noApply) rows.push(`<div>1차 ${e1.score}점 / 컷 ${e1.cut}${e1.fail40 ? ' · 과락' : ''} — ${e1.parts.map((p) => `${esc(p.label)} ${p.got}/${p.pts}`).join(' · ')}</div>`);
+  if (e2 && e2.late) rows.push(`<div>2차 — 대기실 입실 마감 ${esc((S.flags.morn2 || {}).dl || '08:30')} · 도착 ${esc(e2.arr)} · 응시 못 함</div>`);
+  else if (e2) rows.push(`<div>2차 ${e2.score}점 · 합계 ${e2.total} / 최종 컷 ${e2.cut} — ${e2.parts.map((p) => `${esc(p.label)} ${p.got}/${p.pts}`).join(' · ')}</div>`);
   const again = S.final !== 'pass';
   const from = S.nth === 1 && S.startMi ? ` · ${imStartOf(S.startMi).label}` : '';
   return `<div class="eb">${S.name ? esc(S.name) + ' · ' : ''}${esc(t.name)} · ${imNth(S)}${esc(from)} · ${S.year + 1}학년도 임용</div><h2>${K[2]} ${K[0]}</h2><p class="tag">${esc(K[1])}</p>
@@ -5694,7 +6470,7 @@ function imFinalHTML(E, o) {
     <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 4px 6px">${pol || '<div>사진 없음</div>'}</div>
     <div class="brief">${rows.join('')}<div>${esc(imSkillLine(E))}</div></div>
     <div class="stats"><div>점수<b>${o.score.toLocaleString()}</b></div><div>공부<b>${Math.round(S.totalStudy / 60)}h</b></div><div>통장<b>${Math.round(S.money)}만</b></div></div>
-    <div class="col">${again ? `<button class="btn" type="button" data-go="im-again">다시 노량진 (${imNth({ nth: S.nth + 1 })}) ▶</button><p class="small" style="margin:0">실력의 70%를 들고 다시 2월부터</p>` : ''}<button class="btn ${again ? 'sub' : ''}" type="button" data-go="new">처음 화면</button></div>
+    <div class="col">${again ? `<button class="btn" type="button" data-go="im-again">다시 노량진 (${imNth({ nth: S.nth + 1 })}) ▶</button><p class="small" style="margin:0">실력의 70%를 들고 다시 2월부터${S.final === 'late' ? ' · 다음엔 알람 두 개, 시험장 미리 가보기' : ''}</p>` : ''}<button class="btn ${again ? 'sub' : ''}" type="button" data-go="new">처음 화면</button></div>
     <p class="small">${o.newBest ? '최고 기록!' : `최고 ${o.best.toLocaleString()}`}</p>`;
 }
 
@@ -5835,7 +6611,7 @@ function imBotChoice(E) {
   o.opts.forEach((p, i) => { const v = p.bot != null ? p.bot : 0; if (v > bv) { bv = v; best = i; } });
   return best;
 }
-window.__im = Object.assign(window.__im || {}, { pick: (i) => imChoicePick(window.IMGO, i), botChoice: () => imBotChoice(window.IMGO), plan: () => imBotPlan(window.IMGO), bot: imBot, begin: (o) => imBegin(window.IMGO, o), setStart: (mi) => { imPick.startMi = mi; }, starts: () => IM_STARTS.map((x) => x.mi), quizTime: () => imQuizTime(window.IMGO), noteWrong: () => (window.IMGO.G.S.wrongQ || []).slice(), tracks: () => imTracks().map((t) => t.id), predict: () => imPredict1(window.IMGO, 0.85), event: (id) => imRunEvent(window.IMGO, id) });
+window.__im = Object.assign(window.__im || {}, { pick: (i) => imChoicePick(window.IMGO, i), botChoice: () => imBotChoice(window.IMGO), plan: () => imBotPlan(window.IMGO), bot: imBot, begin: (o) => imBegin(window.IMGO, o), setStart: (mi) => { imPick.startMi = mi; }, starts: () => IM_STARTS.map((x) => x.mi), quizTime: () => imQuizTime(window.IMGO), noteWrong: () => (window.IMGO.G.S.wrongQ || []).slice(), tracks: () => imTracks().map((t) => t.id), predict: () => imPredict1(window.IMGO, 0.85), event: (id) => imRunEvent(window.IMGO, id), examMode: null, examForce: null, morning: (stage) => imMorning(window.IMGO, stage), mornItems: (stage) => imMornItems(window.IMGO, stage) });
 Object.defineProperty(window.__im, 'choice', { get: () => imChoiceCur, configurable: true });
 
 /* ---------- 19. 콘텐츠 객체 ---------- */
@@ -7815,6 +8591,7 @@ window.IMGO_GAME = {
     // 누르는 순간엔 조이스틱 — 10px 넘게 끌면 조이스틱, 짧게(0.35초 안) 떼면 탭 이동
     if (G.mode === 'world') { G.joy = { on: true, ox: p.x, oy: p.y, x: p.x, y: p.y, id: e.pointerId, t0: performance.now(), moved: false }; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* 무시 */ } return; }
     if (G.mode === 'dlg') { advDlg(); return; }
+    if (G.mode === 'mini' && G.mini && G.mini.tap && !G.paused) G.mini.tap(p, clockNow()); // 미니가 화면 탭을 받으면 (예: 연타)
     sw = { x: e.clientX, y: e.clientY, done: false };
   });
   cv.addEventListener('pointermove', (e) => {
