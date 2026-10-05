@@ -2454,7 +2454,8 @@ const IM_MAP_LIB = (() => {
     const t = gmin(E);
     const dark = t >= 17 * 60 ? Math.min(0.42, (t - 17 * 60) / 180 * 0.42) : t < 7 * 60 ? 0.3 : 0;
     if (dark <= 0) return;
-    const x0 = E.G.px - E.VW, x1 = E.G.px + E.VW, y0 = E.G.py - E.VH, y1 = E.G.py + E.VH;
+    const cv0 = E.cam ? E.cam() : null, ccx = cv0 ? cv0.x + E.VW / 2 : E.G.px, ccy = cv0 ? cv0.y + E.VH / 2 : E.G.py; // 카메라 중심 (투어 중엔 플레이어와 다름)
+    const x0 = ccx - E.VW, x1 = ccx + E.VW, y0 = ccy - E.VH, y1 = ccy + E.VH;
     g.fillStyle = `rgba(12,16,44,${dark})`; g.fillRect(x0, y0, x1 - x0, y1 - y0);
     g.save(); g.globalCompositeOperation = 'lighter';
     const a = dark / 0.42;
@@ -2905,7 +2906,7 @@ const IM_SCENES = (() => {
       g.fillStyle = '#C9CED8'; for (let k = 0; k < 9; k++) g.fillRect(sx + 10, dy + 42 + k * 11, sw - 20, 1);
       const prog = clampN(((b || 0) % 64) / 64, 0, 1); g.strokeStyle = '#2B3156'; g.lineWidth = 1.2;
       for (let k = 0; k < Math.floor(prog * 9); k++) { g.beginPath(); for (let xx = 0; xx < sw - 30; xx += 6) g.lineTo(sx + 12 + xx, dy + 40 + k * 11 + Math.sin(xx * 0.9 + k) * 1.6); g.stroke(); }
-      box(g, '#6DB5FF', vw * 0.74, dy + 22, 58, 34, 3); txt(g, '수험표', vw * 0.74 + 29, dy + 36, 10, '#12152A', FD); txt(g, P(m, 'no') || '0417', vw * 0.74 + 29, dy + 50, 11, '#12152A', FD);
+      box(g, '#6DB5FF', vw * 0.74, dy + 22, 58, 34, 3); txt(g, '수험표', vw * 0.74 + 29, dy + 36, 10, '#12152A', FD); txt(g, P(m, 'no') || (E.G && E.G.S && E.G.S.examNo) || '0417', vw * 0.74 + 29, dy + 50, 11, '#12152A', FD);
       g.save(); g.translate(vw * 0.72, dy + 80); g.rotate(-0.5); box(g, '#1B1F33', 0, 0, 60, 6, 3); box(g, '#9AA3B2', 52, 1, 8, 4, 1); g.restore();
     });
   }
@@ -3078,7 +3079,7 @@ const IM_SCENES = (() => {
       box(g, '#FFFFFF', mx + 46, my + 4, mw - 56, 14, 7); txt(g, 'exam.edu-office.kr/임용/결과', mx + 54, my + 15, 9, '#5A6283', FB, 'left');
       box(g, '#2B4A8A', mx, my + 22, mw, 34); txt(g, '○○시도교육청 · 교원임용시험', mx + 12, my + 44, 13, '#FFFFFF', FD, 'left');
       g.textAlign = 'center'; fitFont(g, label, mw - 30, 18, FD); g.fillStyle = '#1B2340'; g.fillText(label, vw / 2, my + 84);
-      txt(g, `수험번호 ${P(m, 'no', '0417-2318')}`, vw / 2, my + 106, 12, '#5A6283', FB);
+      txt(g, `수험번호 ${P(m, 'no', (E.G && E.G.S && E.G.S.examNo) || '0417-2318')}`, vw / 2, my + 106, 12, '#5A6283', FB);
       const cy = my + 106 + (mh - 106) / 2;
       if (pass === null) {
         const a = t * 5; g.strokeStyle = '#C9CED8'; g.lineWidth = 6; g.beginPath(); g.arc(vw / 2, cy - 6, 24, 0, 7); g.stroke();
@@ -3276,7 +3277,7 @@ function imMnNormQ(x) {
   let w = x.w ?? x.opts ?? x.wrong ?? [];
   if (!Array.isArray(w)) w = [w];
   w = [...new Set(w.map(String).filter((v) => v && v !== String(a)))].slice(0, 2);
-  return { q: String(q), a: String(a), w, tip: String(x.tip ?? x.why ?? '') };
+  return { q: String(q), a: String(a), w, tip: String(x.tip ?? x.why ?? ''), id: x.id };
 }
 // qs: 배열 | IM_QB 키 문자열 | 없음(트랙 은행 → 교육학 기본)
 function imMnQs(E, src, track, n) {
@@ -3594,15 +3595,123 @@ function imSortMini(E, opts = {}) {
 /* =====================================================================
    3. 기출 퀴즈 — 6초 3지선다 연속 (formMini 퀴즈 모드)
    ===================================================================== */
+// opts: { qs, title, sub, time(문항 초), count, reveal(오답 공개 초, 기본 1.5), bg } → 끝나면 m.wrongIds / m.rightIds (문항 id — 오답노트용)
 function imQuizMini(E, opts = {}) {
   const fin = imMnFin(E, opts), track = imMnTrack(opts.track), count = opts.count || 5, time = opts.time || 6;
   const qs = imMnQs(E, opts.qs, track, count);
   const steps = qs.map((x) => ({ ask: x.q, ans: x.a, opts: x.w.slice(0, 2), why: `정답: ${x.a}${x.tip ? ' · ' + x.tip : ''}`, one: Math.max(x.a.length, ...x.w.map((w) => w.length)) > 11 }));
   const m = E.formMini({
-    quiz: true, title: opts.title || '기출 퀴즈', sub: opts.sub || `문항당 ${time}초`, goal: `${steps.length}문제 · 3지선다`, time, color: '#2E3F86', hurt: 1, pass: 0.6,
+    quiz: true, title: opts.title || '기출 퀴즈', sub: opts.sub || `문항당 ${time}초`, goal: `${steps.length}문제 · 3지선다`, time, color: '#2E3F86', hurt: 1, pass: 0.6, revealT: opts.reveal ?? 1.5,
     banner: opts.title || '기출 퀴즈!', bannerSub: `${steps.length}문제 · 문항당 ${time}초`, bg: (mm, b, now) => imMnBG(E, opts.bg || 'reading', mm, b, now), steps,
-  }, { forced: false, later: false, onEnd: (ok, mm) => fin(mm.score, mm) });
+  }, { forced: false, later: false, onEnd: (ok, mm) => {
+    mm.wrongIds = qs.filter((x, k) => x.id && mm.results[k] !== 'ok').map((x) => x.id);
+    mm.rightIds = qs.filter((x, k) => x.id && mm.results[k] === 'ok').map((x) => x.id);
+    fin(mm.score, mm);
+  } });
+  m.qs = qs;
   m.auto = function () { imMnFormAuto(this); };
+  return m;
+}
+
+/* =====================================================================
+   3-1. 오늘의 핵심 개념 — 퀴즈 직전 개념 → 키워드 3쌍 카드 (곧 나올 문항에서 뽑음)
+   opts: { qs:[{q,a,tip}], title, sub, sec(자동 넘김 초, 기본 7), bg }  ↑(아무 키)로 1초 뒤부터 넘기기 · 봇: auto()
+   ===================================================================== */
+function imMnCue(q) {
+  return String(q).replace(/\s*\(([^)]*)\)\s*(은|는)\?$/, ' ($1)').replace(/\s*(은|는|이란|란)\?$/, '').replace(/\?$/, '').replace(/\s+/g, ' ').trim();
+}
+function imConceptMini(E, opts = {}) {
+  const fin = imMnFin(E, opts), C = E.C, sec = opts.sec || 7;
+  const pairs = (opts.qs || []).map(imMnNormQ).filter(Boolean).slice(0, 3).map((x) => ({ cue: imMnCue(x.q), key: x.a, tip: x.tip }));
+  const title = opts.title || '오늘의 핵심 개념';
+  const m = {
+    type: 'imConcept', bpm: 90, style: 'focus', cfg: {}, pairs, noFail: true, minSkip: 1,
+    pad: [null, ['↑ 외웠다!', '바로 시작'], null],
+    enter() { E.sfx.page(); },
+    update(dt, st) { if (st >= sec && !this.done) { this.done = true; fin(1, this); } },
+    input(dir, now) { const st = now - this.t0; if (st >= this.minSkip && !this.done) { E.sfx.key(); this.done = true; fin(1, this); } },
+    auto() { this.input('up', E.clockNow()); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH;
+      imMnBG(E, opts.bg || 'reading', this, b, now);
+      g.fillStyle = 'rgba(10,12,24,.45)'; g.fillRect(0, 0, VW, VH);
+      imMnHead(E, `📌 ${title}`, 1 - st / sec, C.chalk, `${Math.max(0, Math.ceil(sec - st))}초`);
+      const x = 14, w = VW - 28, top = 104;
+      // 카드 높이 계산
+      g.font = `800 13.5px ${E.FB}`;
+      const rows = pairs.map((p) => ({ p, cl: E.wrapText(p.cue, w - 46, `800 13.5px ${E.FB}`, 2), tl: p.tip ? E.wrapText(p.tip, w - 46, `700 11px ${E.FB}`, 1) : [] }));
+      const rh = rows.map((r) => 14 + r.cl.length * 18 + 28 + r.tl.length * 15 + 6);
+      const h = 50 + rh.reduce((a, z) => a + z, 0) + 30;
+      const k = E.clamp(st / 0.35, 0, 1);
+      g.globalAlpha = k;
+      imMnPaper(E, x, top, w, h, '#FFFDF4', 14);
+      g.fillStyle = '#2E3F86'; E.rr(x, top, w, 40, 14); g.fill(); g.fillRect(x, top + 26, w, 14);
+      g.fillStyle = '#FFD54A'; g.font = `18px ${E.FD}`; g.textAlign = 'left'; g.fillText('오늘의 핵심 개념', x + 14, top + 27);
+      g.fillStyle = '#B9C0DA'; g.font = `800 11px ${E.FB}`; g.textAlign = 'right'; g.fillText(opts.sub || '곧 나올 문제에서!', x + w - 12, top + 26);
+      let y = top + 50;
+      rows.forEach((r, i) => {
+        const ki = E.clamp((st - 0.25 - i * 0.35) / 0.3, 0, 1);
+        g.globalAlpha = k * ki;
+        g.fillStyle = ['#6DB5FF', '#FF5C6C', '#4FD69C'][i % 3]; g.beginPath(); g.arc(x + 20, y + 12, 11, 0, 7); g.fill();
+        g.fillStyle = '#12152A'; g.font = `14px ${E.FD}`; g.textAlign = 'center'; g.fillText(String(i + 1), x + 20, y + 17);
+        g.font = `800 13.5px ${E.FB}`; imMnTextLines(E, r.cl, x + 38, y + 16, 18, '#4A5675');
+        const ky = y + 16 + r.cl.length * 18 + 6;
+        g.font = `20px ${E.FD}`; const kt = `→ ${r.p.key}`; const kw = Math.min(w - 50, g.measureText(kt).width + 16);
+        g.fillStyle = 'rgba(255,213,74,.55)'; E.rr(x + 34, ky - 18, kw, 25, 6); g.fill();
+        g.fillStyle = '#1B2340'; g.textAlign = 'left'; E.fitText(kt, w - 58, 20, E.FD); g.fillText(kt, x + 42, ky);
+        if (r.tl.length) { g.font = `700 11px ${E.FB}`; imMnTextLines(E, r.tl, x + 38, ky + 19, 15, '#6A7393'); }
+        y += rh[i];
+        if (i < rows.length - 1) { g.strokeStyle = '#E3E0D2'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 14, y - 3); g.lineTo(x + w - 14, y - 3); g.stroke(); }
+      });
+      g.globalAlpha = k;
+      g.fillStyle = '#C62828'; g.font = `800 12px ${E.FB}`; g.textAlign = 'center'; g.fillText('키워드만 잡아도 반은 맞힌다 — 노란 칸을 외워요', VW / 2, top + h - 12);
+      g.globalAlpha = 1;
+      if (st >= this.minSkip) { g.fillStyle = 'rgba(255,255,255,.75)'; g.font = `800 12px ${E.FB}`; g.textAlign = 'center'; g.fillText('↑ 외웠다! 바로 시작', VW / 2, Math.min(VH - E.padV - 14, top + h + 26)); }
+    },
+  };
+  return m;
+}
+
+/* =====================================================================
+   3-2. 1차 시험 수험표 — 시험 시작 카드 (cardMini 변형 · 약 2.6초)
+   opts: { name, no(수험번호), subject, date, place, level('초등'|'중등'), beats=6 }
+   ===================================================================== */
+function imTicketMini(E, opts = {}) {
+  const m = E.cardMini('1차 시험', '', 'urgent', 'exam', opts.beats || 6);
+  m.no = opts.no; m.board = '수험번호 확인 · 신분증 지참';
+  m.draw = function (st, b, now) {
+    const g = E.g, VW = E.VW, VH = E.VH, k = E.clamp(b * 1.6, 0, 1);
+    imMnBG(E, 'exam', this, b, now);
+    g.fillStyle = 'rgba(10,12,24,.55)'; g.fillRect(0, 0, VW, VH);
+    const x = 18, w = VW - 36, h = 262, y = Math.max(108, VH * 0.24);
+    g.save(); g.globalAlpha = k; g.translate(VW / 2, y + h / 2); g.rotate(-0.025 * k); g.scale(0.92 + 0.08 * k, 0.92 + 0.08 * k); g.translate(-VW / 2, -(y + h / 2));
+    imMnPaper(E, x, y, w, h, '#FFFDF4', 6);
+    g.fillStyle = '#2E3F86'; g.fillRect(x, y, w, 46);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; E.fitText('2027학년도 공립 교사 임용후보자 선정경쟁시험', w - 20, 12, E.FB); g.fillText('2027학년도 공립 교사 임용후보자 선정경쟁시험', VW / 2, y + 19);
+    g.fillStyle = '#FFD54A'; g.font = `19px ${E.FD}`; g.fillText(`제1차 시험 수험표 · ${opts.level || '중등'}`, VW / 2, y + 39);
+    // 사진
+    const px = x + 14, py = y + 60, pw = 70, ph = 88;
+    g.fillStyle = '#DCE2EE'; g.fillRect(px, py, pw, ph); g.strokeStyle = '#8A93AD'; g.lineWidth = 1; g.strokeRect(px, py, pw, ph);
+    g.save(); g.beginPath(); g.rect(px, py, pw, ph); g.clip();
+    const me = E.GAME.me ? E.GAME.me(E) : {}; E.drawFront(px + pw / 2, py + ph + 10, 0.68, { body: me.body, hair: me.hair, pose: 'idle', mood: 'calm', glasses: me.glasses, long: me.pony });
+    g.restore();
+    // 칸
+    const rows = [['수험번호', opts.no || '0000'], ['성명', opts.name || '나'], ['응시 과목', opts.subject || ''], ['시험일', opts.date || ''], ['시험장', opts.place || '']];
+    const rx = px + pw + 12, rw = x + w - 14 - rx;
+    rows.forEach(([a, v], i) => {
+      const ry = py + i * 18 + (i ? 4 : 0);
+      g.fillStyle = '#6A7393'; g.font = `800 10px ${E.FB}`; g.textAlign = 'left'; g.fillText(a, rx, ry + 12);
+      g.fillStyle = '#1B2340'; const big = i < 2; E.fitText(String(v), rw - 54, big ? 16 : 12, big ? E.FD : E.FB); if (!big) g.font = `800 ${Math.min(12, parseFloat(g.font) || 12)}px ${E.FB}`; g.fillText(String(v), rx + 54, ry + 13);
+      g.strokeStyle = '#E3E0D2'; g.beginPath(); g.moveTo(rx, ry + 17); g.lineTo(rx + rw, ry + 17); g.stroke();
+    });
+    // 유의사항 + 직인
+    g.fillStyle = '#4A5675'; g.font = `700 10.5px ${E.FB}`; g.textAlign = 'left';
+    ['· 08:10까지 입실 · 신분증 · 아날로그 시계만', '· 1교시 교육학 → 2·3교시 전공 (점심시간 없음)', '· 정답은 공개되지 않습니다'].forEach((l, i) => g.fillText(l, x + 14, py + ph + 24 + i * 15));
+    g.save(); g.translate(x + w - 44, y + h - 40); g.rotate(-0.2); g.strokeStyle = 'rgba(210,59,46,.85)'; g.lineWidth = 2.5; g.beginPath(); g.arc(0, 0, 22, 0, 7); g.stroke();
+    g.fillStyle = 'rgba(210,59,46,.85)'; g.font = `11px ${E.FD}`; g.textAlign = 'center'; g.fillText('교육감', 0, -2); g.fillText('직인', 0, 11); g.restore();
+    g.restore();
+    g.globalAlpha = 1; g.fillStyle = E.C.chalk; g.textAlign = 'center'; E.fitText('1차 시험', VW - 40, 34, E.FD); g.fillText('1차 시험', VW / 2, y - 14);
+  };
   return m;
 }
 
@@ -3689,7 +3798,7 @@ function imMockMini(E, opts = {}) {
   let qs = imMnQs(E, opts.qs, track);
   const n = E.clamp(opts.count || 10, 1, Math.max(1, qs.length));
   qs = qs.slice(0, n);
-  const items = qs.map((x) => { const o = E.shuffle([x.a, x.w[0], x.w[1]]); return { q: x.q, opts: o, ans: o.indexOf(x.a), tip: x.tip }; });
+  const items = qs.map((x) => { const o = E.shuffle([x.a, x.w[0], x.w[1]]); return { q: x.q, opts: o, ans: o.indexOf(x.a), tip: x.tip, id: x.id }; });
   const N = opts.people || 342, title = opts.title || '월례 모의고사';
   const m = imMnChoiceMini(E, {
     fin, title, banner: title, bannerSub: `${items.length}문항 · ${minutes}분 (실제 ${Math.round(total)}초) · OMR 마킹`, bg: opts.bg || 'exam', style: 'tense', bpm: 100, items, total, neutral: true, endHold: 4,
@@ -3701,6 +3810,8 @@ function imMockMini(E, opts = {}) {
     onEndPhase(mm) {
       mm.acc = mm.right / items.length; mm.score = Math.round(mm.acc * 100);
       mm.total = N; mm.rank = E.clamp(Math.round(N * (0.03 + 0.92 * Math.pow(1 - mm.acc, 1.15))), 1, N);
+      mm.wrongIds = items.filter((it, k) => it.id && !mm.oks[k]).map((it) => it.id);
+      mm.rightIds = items.filter((it, k) => it.id && mm.oks[k]).map((it) => it.id);
       E.sfx.stamp(); E.setPad(null);
     },
     drawBody(mm) {
@@ -4366,7 +4477,7 @@ function imRefreshMini(E, opts = {}) {
         g.fillStyle = '#8A93AD'; g.font = `800 11px ${E.FB}`; g.fillText('(새로고침은 대기열과 무관합니다… 아마도)', cx, cy + 54);
         for (let i = 0; i < 8; i++) { const a = st * 5 + i * 0.785; g.fillStyle = `rgba(59,111,216,${0.2 + (i / 8) * 0.8})`; g.beginPath(); g.arc(cx + Math.cos(a) * 14, cy - 86 + Math.sin(a) * 14, 3, 0, 7); g.fill(); }
       } else if (this.phase === 'load') {
-        g.fillStyle = '#1B2340'; g.font = `18px ${E.FD}`; g.textAlign = 'center'; g.fillText('수험번호 확인 ✓', cx, cy - 16); g.fillText('결과 조회 중' + '.'.repeat(1 + (Math.floor(st * 4) % 3)), cx, cy + 16);
+        g.fillStyle = '#1B2340'; g.font = `18px ${E.FD}`; g.textAlign = 'center'; const idt = opts.name ? `${opts.name} · 수험번호 확인 ✓` : '수험번호 확인 ✓'; E.fitText(idt, w - 30, 18, E.FD); g.fillText(idt, cx, cy - 16); g.font = `18px ${E.FD}`; g.fillText('결과 조회 중' + '.'.repeat(1 + (Math.floor(st * 4) % 3)), cx, cy + 16);
       } else if (this.phase === 'drum') {
         const k = (st - this.ph0) % 0.5, s = 1 + Math.max(0, 0.25 - k) * 1.2;
         g.fillStyle = '#1B2340'; g.fillRect(x, y + 28, w, h - 28);
@@ -4380,6 +4491,7 @@ function imRefreshMini(E, opts = {}) {
         g.restore(); g.globalAlpha = 1;
         g.fillStyle = pass ? '#1F4E9C' : '#6A7393'; g.font = `800 13px ${E.FB}`; g.textAlign = 'center';
         g.fillText(pass ? '축하합니다! 버틴 시간이 답을 했어요.' : '이번엔 닿지 않았어요. 버틴 1년은 그대로 남아요.', cx, cy + 44);
+        if (opts.name) { g.fillStyle = '#8A93AD'; g.font = `800 12px ${E.FB}`; const nl = `응시자 ${opts.name}${opts.no ? ' · 수험번호 ' + opts.no : ''}`; E.fitText(nl, w - 30, 12, E.FB); g.fillText(nl, cx, cy - 58); }
       }
       // 나
       const pose = this.phase === 'reveal' ? (pass ? 'talk' : 'idle') : 'phone';
@@ -4443,7 +4555,36 @@ const IM_ROOMS = {
 };
 const IM_NTH = ['초수', '재수', '삼수', '사수', '오수', 'N수'];
 const IM_COL = { hr: '#FF9F6B', act: '#4FD69C', chalk: '#FFD54A', info: '#6DB5FF', hot: '#FF5C6C', purple: '#B48CFF' };
-let imPick = { step: 1, lv: '중등', track: null, gender: 'f', room: 'nowin' };
+let imPick = { step: 1, lv: '중등', track: null, gender: 'f', room: 'nowin', name: '', startMi: 0 };
+// 입성 시기: mi = IM_MONTHS 인덱스 · lv = 1차 실력 시작값(학교·인강에서 해 온 만큼, 0 = 기본 18) · 늦을수록 교과교육(ped)은 덜 다듬어짐
+const IM_STARTS = [
+  { mi: 0, label: '2월 입성', sub: '정규 1년', flavor: '졸업식 다음 날, 캐리어 두 개. 기본이론부터 차근차근.', diff: 1, diffShort: '보통', diffText: '1년 풀코스 · 첫 달은 정착(튜토리얼)', money: 180, hp: 100, mental: 80, burnout: 0, lv: 0,
+    title: '캐리어 두 개', story: ['졸업식 사진은 본가 책상에 두고 왔다.', '노량진역 1번 출구, 학원 간판들이 하늘을 가린다.', '1년. 딱 1년만 버티자.'] },
+  { mi: 4, label: '6월 입성', sub: '교생 실습 끝나고', flavor: '실습 마지막 날 롤링페이퍼를 챙겨 바로 짐을 쌌다.', diff: 2, diffShort: '조금 어려움', diffText: '학교에서 배운 만큼은 안다 · 바로 첫 모의고사', money: 120, hp: 92, mental: 74, burnout: 8, lv: 46,
+    title: '교생 실습 끝나고 바로', story: ['실습 마지막 날, 아이들이 써 준 롤링페이퍼.', '「선생님, 꼭 진짜 선생님 되세요!」', '그 종이를 기본서 사이에 끼우고, 다음 날 아침 노량진행 1호선을 탔다.'] },
+  { mi: 6, label: '8월 입성', sub: '1학기 끝나고', flavor: '기말 끝나자마자 노량진. 혼자 1회독은 해 왔다.', diff: 3, diffShort: '어려움', diffText: '도착한 날 TO 사전예고 · 교과교육은 덜 다듬어짐', money: 115, hp: 94, mental: 74, burnout: 10, lv: 54,
+    title: '1학기 마치고', story: ['기말 레포트를 내자마자 짐을 쌌다.', '학교 도서관에서 혼자 돌린 1회독, 이제 노량진 속도로.', '그리고 오늘은 TO 사전예고가 뜨는 날.'] },
+  { mi: 7, label: '9월 입성', sub: '파이널부터', flavor: '인강 2배속으로 버틴 반년. 이제 현강 파이널.', diff: 3, diffShort: '어려움+', diffText: '파이널 · 추석 · 시행공고가 한 달에', money: 110, hp: 92, mental: 70, burnout: 12, lv: 58,
+    title: '파이널부터 합류', story: ['반년 동안 본가 책상에서 인강 2배속.', '모르는 수험생 300명과 같은 강의실, 같은 파이널.', '추석에 집에 갈지는… 일단 오늘부터 버티고.'] },
+  { mi: 8, label: '10월 입성', sub: '원서접수 직전', flavor: '원서 마감 당일 노량진역에 내렸다. 접수부터!', diff: 4, diffShort: '매우 어려움', diffText: '오늘 18:00 원서 마감 · 시험까지 한 달', money: 105, hp: 90, mental: 68, burnout: 14, lv: 61,
+    title: '원서 마감 당일', story: ['본가 책상에서 버틴 아홉 달.', '마지막은 노량진에서 끝내기로 했다.', '그런데 오늘이 원서 마감일이다. 18시 전에 내 방 노트북으로 접수부터!'] },
+  { mi: 9, label: '11월 입성', sub: '1차 직전', flavor: '고향 독서실에서 올라온 날이 바로 1차 시험일.', diff: 5, diffShort: '극한', diffText: '도착한 날이 1차 시험 · 원서는 미리 냈다', money: 100, hp: 90, mental: 66, burnout: 16, lv: 65,
+    title: '1차 직전', story: ['고향 독서실 37번 자리를 정리하고 올라왔다.', '원서는 이미 냈고, 수험표도 출력해 두었다.', '그리고 오늘이… 1차 시험일이다.'] },
+];
+const imStartOf = (mi) => IM_STARTS.find((o) => o.mi === mi) || Object.assign({}, IM_STARTS[0], { mi, label: `${['2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월', '1월', '2월'][mi] || ''} 입성`, lv: Math.min(62, 18 + mi * 5.5) });
+// 이름 · 호칭 (엄마가 부르는 말: 받침 있으면 '아', 없으면 '야')
+const IM_SURNAMES = '김이박최정강조윤장임한오서신권황안송류전홍고문양손배백허유남심노하곽성차주우구민진나지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국은편용예봉경';
+function imCleanName(v) { return Array.from(String(v || '').replace(/[<>&"'`\\\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim()).slice(0, 8).join('').trim(); }
+const imName = (S) => (S && S.name) || '나';
+function imGiven(nm) { return /^[가-힣]{3}$/.test(nm) && IM_SURNAMES.includes(nm[0]) ? nm.slice(1) : nm; }
+function imBatchim(ch) { const c = String(ch || '').charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0; }
+function imVoc(S) { // '지은아' · '민수야' · 이름 없으면 '우리 딸/아들'
+  const nm = S && S.name; if (!nm) return S && S.gender === 'm' ? '우리 아들' : '우리 딸';
+  const gv = imGiven(nm), last = gv[gv.length - 1];
+  return /[가-힣]/.test(last) ? gv + (imBatchim(last) ? '아' : '야') : gv;
+}
+function imKid(S) { const nm = S && S.name; if (!nm) return S && S.gender === 'm' ? '아들' : '딸'; const gv = imGiven(nm), last = gv[gv.length - 1]; return gv + (imBatchim(last) ? '이' : ''); } // '우리 지은이'
+const imPlayed = (S) => (S.nth > 1 ? 99 : S.mi - (S.startMi || 0)); // 이번 회차에서 몇 번째 달인지 (0 = 첫 달)
 let imChoiceCur = null;
 let imSchedCache = { key: '', list: null };
 const imBot = { on: false, log: [] };
@@ -4480,12 +4621,53 @@ function imQsFor(E, pool, n) {
   return E.shuffle(L.slice()).slice(0, n || L.length);
 }
 function imTrackPools(t) { return [t.qb || t.id]; }
+// ---- 퀴즈 공정성: 문항 시간 · 난이도 · 오답노트 ----
+// 문항당 시간: 처음 3달 10초 → 8초 → 9월(파이널)부터 7초. 시험일도 그 달의 시간과 같음
+function imQuizTime(E) { const S = E.G.S; return imPlayed(S) < 3 ? 10 : S.mi >= IM_MI.FINAL ? 7 : 8; }
+// 핵심 개념(쉬운 쪽으로 분류) — 정답 키워드
+const IM_CORE_A = ['스키너', '근접발달영역', '다중지능이론', '귀인이론', '타일러 모형', '잠재적 교육과정', '영 교육과정', '나선형 교육과정', '형성평가', '준거참조평가', '타당도', '신뢰도', 'ARCS 모형', '직소', '거꾸로 학습', '인간중심 상담', '진보주의', '항존주의', '성균관', '정체성 대 혼미', '갈등론', '문화자본', 'IEP', '정적 강화', 'LIFO', 'FIFO', '스키마', '계획하기', 'ATP', '바른·슬기·즐거운', '3학년', '180°', '응결', '고조선', '축척'];
+// 난이도 휴리스틱(작을수록 쉬움): 짧은 정답·짧은 문제·핵심 용어가 쉽고, 숫자·기호·영문 약어 정답은 어려움. 데이터에 lv 가 있으면 그 값
+function imQDiff(x) {
+  if (x.lv != null) return x.lv;
+  let d = String(x.a).length * 0.12 + String(x.q).length * 0.025;
+  if (/[0-9²₂()]/.test(x.a)) d += 0.5;
+  if (/[A-Za-z]/.test(x.a) && !/[가-힣]/.test(x.a)) d += 0.3;
+  if (IM_CORE_A.includes(x.a)) d -= 0.8;
+  return d;
+}
+// 문항 고르기: 오답노트 문항 re 개 먼저 + 나머지는 달에 따라 쉬운 쪽 창에서 (첫 3달 45% · 8월까지 75% · 이후/시험 전체)
+function imPickQs(E, pools, n, o = {}) {
+  const S = E.G.S, QB = imHas('IM_QB') ? IM_QB : {}, seen = new Set(), L = [];
+  [].concat(pools).forEach((p) => (Array.isArray(QB[p]) ? QB[p] : []).forEach((x, i) => { if (seen.has(x.q)) return; seen.add(x.q); L.push(Object.assign({ id: `${p}:${i}` }, x)); }));
+  if (!L.length) return imQsFor(E, pools, n);
+  const wrong = S.wrongQ || [];
+  const re = L.filter((x) => wrong.includes(x.id)).sort((a, z) => wrong.indexOf(z.id) - wrong.indexOf(a.id)).slice(0, Math.min(o.reask ?? 2, n));
+  re.forEach((x) => { x.reask = true; });
+  const pl = imPlayed(S), frac = o.hard ? 1 : pl < 3 ? (o.easyFrac ?? 0.45) : S.mi < IM_MI.FINAL ? (o.midFrac ?? 0.75) : 1;
+  const rest = L.filter((x) => !re.includes(x)).sort((a, z) => imQDiff(a) - imQDiff(z));
+  const win = rest.slice(0, Math.max(n * 2, Math.ceil(rest.length * frac)));
+  return E.shuffle(re.concat(E.shuffle(win).slice(0, n - re.length)));
+}
+// 오답노트 갱신: 틀린 문항 추가(최근 것이 뒤), 맞힌 문항은 졸업
+function imNoteWrong(E, m) {
+  const S = E.G.S; if (!m) return;
+  S.wrongQ = (S.wrongQ || []).filter((id) => !(m.rightIds || []).includes(id));
+  (m.wrongIds || []).forEach((id) => { const i = S.wrongQ.indexOf(id); if (i >= 0) S.wrongQ.splice(i, 1); S.wrongQ.push(id); });
+  if (S.wrongQ.length > 40) S.wrongQ.splice(0, S.wrongQ.length - 40);
+  if (E.G.D && (m.wrongIds || []).length) E.G.D.wrongNew = (E.G.D.wrongNew || 0) + m.wrongIds.length;
+}
+// 퀴즈 직전 「오늘의 핵심 개념」 카드: 곧 나올 문항 중 3개 (오답노트 문항 우선)
+function imConcept(E, qs, o = {}) {
+  const pick = qs.filter((x) => x.reask).concat(E.shuffle(qs.filter((x) => !x.reask))).slice(0, 3);
+  return imMini(E, 'imConceptMini', { qs: E.shuffle(pick.slice()), title: o.title || '오늘의 핵심 개념', sub: o.sub || (pick.some((x) => x.reask) ? '오답노트 문항 포함!' : '이 3개, 곧 나와요!'), sec: o.sec || 7, bg: o.bg }, () => null);
+}
+function imQidText(id) { const [p, i] = String(id).split(':'); const QB = imHas('IM_QB') ? IM_QB : {}; const x = (QB[p] || [])[+i]; return x ? x : null; }
 
 /* ---------- 2. 상태 ---------- */
 function imInitState() {
   return { v: 1, track: null, level: '중등', gender: 'f', room: 'nowin', hp: 100, mental: 80, money: 180, sk: {}, burnout: 0, mi: 0, nth: 1, year: 2026,
     mates: { mate1: 40, mate2: 40, mate3: 40 }, album: [], notes: 0, prints: 0, mockHistory: [], to: 0, toBase: 0, cut: 0, applied: false,
-    exam1: null, exam2: null, final: null, rest: false, flags: {}, ledger: [], months: [], totalStudy: 0, history: [] };
+    exam1: null, exam2: null, final: null, rest: false, flags: {}, ledger: [], months: [], totalStudy: 0, history: [], name: '', startMi: 0, wrongQ: [], examNo: '' };
 }
 function imSetupTrack(E, S) {
   const t = imTrackById(S.track);
@@ -4700,7 +4882,7 @@ function imStudyAt(E, s) {
   const S = E.G.S, t = imTrackOf(E);
   if (S.mi >= IM_MI.RES1 || s.sk === 's2') return imSecondPractice(E, /면접/.test(s.title) ? 'interview' : /지도안/.test(s.title) ? 'plan' : 'demo', () => imSlotDone(E, s), s.title);
   const key = imSkKey(E, s.sk);
-  const mini = imMini(E, 'imStudyMini', { track: t.id, title: s.title, qs: imQsFor(E, Math.random() < 0.4 ? 'edu' : imTrackPools(t), 4), onEnd: (sc, m) => {
+  const mini = imMini(E, 'imStudyMini', { track: t.id, title: s.title, qs: imPickQs(E, Math.random() < 0.4 ? 'edu' : imTrackPools(t), 4, { reask: 1 }), intro: S.name ? `${S.name} 씨부터 시작! 기출 문답 빠르게 돌려 봐요.` : undefined, onEnd: (sc, m) => {
     const n = imGain(E, key, 1.5 + 4.5 * sc); imStudied(E, s.e - s.s, sc);
     Object.keys(S.mates).forEach((k) => { S.mates[k] = E.clamp(S.mates[k] + (sc > 0.6 ? 3 : -2), 0, 100); });
     imMental(E, sc > 0.6 ? 4 : -2);
@@ -4710,8 +4892,10 @@ function imStudyAt(E, s) {
 }
 function imMockAt(E, s) {
   const S = E.G.S, t = imTrackOf(E);
-  const qs = imQsFor(E, imTrackPools(t).concat(['edu']), 10);
-  const mini = imMini(E, 'imMockMini', { qs, title: `${imMonthLabel(S.mi)} ${s.title}`, minutes: 120, track: t.id, onEnd: (sc, m) => {
+  const qs = imPickQs(E, imTrackPools(t).concat(['edu']), 10, { reask: 3, easyFrac: 0.6, midFrac: 0.85 });
+  const seconds = Math.round(qs.length * imQuizTime(E) * 0.6); // 문항당 6초(첫 달들) · 4.8초 · 4.2초(파이널)
+  const mini = imMini(E, 'imMockMini', { qs, title: `${imMonthLabel(S.mi)} ${s.title}`, minutes: 120, seconds, track: t.id, onEnd: (sc, m) => {
+    imNoteWrong(E, m);
     const rank = m && m.rank != null ? m.rank : Math.max(1, Math.round((1 - sc) * 180 + 5));
     const total = (m && m.total) || 200;
     const pred = imPredict1(E, sc);
@@ -4725,7 +4909,7 @@ function imMockAt(E, s) {
     if (top <= 0.1) imAlbum(E, '🏅', `모의고사 ${rank}등!`);
     E.toast(`모의고사 ${Math.round(sc * 100)}점 · ${rank}/${total}등 · 예상 1차 ${pred}점`, top <= 0.5 ? 'ok' : 'bad');
   } }, () => imQuizFallback(E, qs, s.title, (sc, m) => { m.rank = Math.round((1 - sc) * 180 + 5); }));
-  E.runMinis([E.cardMini(s.title, '모의고사실 · OMR 대신 답안지', 'urgent', 'exam'), mini], () => imSlotDone(E, s));
+  E.runMinis([E.cardMini(s.title, '모의고사실 · OMR 대신 답안지', 'urgent', 'exam'), imConcept(E, qs, { sub: '시험 전 5분 훑어보기', bg: 'exam', sec: 6 }), mini], () => imSlotDone(E, s));
 }
 function imPracticeAt(E, s, extra) {
   const S = E.G.S, t = imTrackOf(E), key = imPracKey(E);
@@ -4782,12 +4966,13 @@ function imReading(E) {
 }
 function imReadingQuiz(E, key) {
   const S = E.G.S, t = imTrackOf(E), pool = key === 'edu' || /교육학|교직/.test((imSkillDefs(t).find((d) => d.key === key) || {}).label || '') ? ['edu'] : imTrackPools(t);
-  const qs = imQsFor(E, pool, 5);
-  const mini = imQuiz(E, { qs, title: '기출 퀴즈', sub: '독서실 · 6초 3지선다', time: 6, count: 5, onEnd: (sc) => {
+  const qs = imPickQs(E, pool, 5, { reask: 2 }), time = imQuizTime(E);
+  const mini = imQuiz(E, { qs, title: '기출 퀴즈', sub: `독서실 · ${time}초 3지선다`, time, count: 5, onEnd: (sc, m) => {
+    imNoteWrong(E, m);
     const bonus = S.notes > 0 ? 1.2 : 1, n = imGain(E, key, (1.5 + 5 * sc) * bonus); imStudied(E, 100, sc); imMental(E, -5); E.statAdd('hp', -4);
-    E.toast(`기출 ${Math.round(sc * 100)}% · 실력 +${n.toFixed(1)}`, sc > 0.6 ? 'ok' : '');
+    E.toast(`기출 ${Math.round(sc * 100)}% · 실력 +${n.toFixed(1)}${S.wrongQ.length ? ` · 오답노트 ${S.wrongQ.length}` : ''}`, sc > 0.6 ? 'ok' : '');
   } });
-  E.runMinis([mini], () => imUseTime(E, 100));
+  E.runMinis([imConcept(E, qs), mini], () => imUseTime(E, 100));
 }
 function imReadingSort(E) {
   const S = E.G.S, t = imTrackOf(E), key = imSkill1(E)[0];
@@ -4867,8 +5052,8 @@ function imCallMom(E) {
   const S = E.G.S, D = E.G.D;
   if (D.called) return E.say([{ who: '나', text: '아까 통화했잖아. 엄마 바빠.' }]);
   D.called = 1;
-  const lines = (imHas('IM_LINES') && IM_LINES.mom) || ['밥은 먹었니?', '반찬 보냈다~ 총무님한테 받아.', '올해는 꼭 될 거야. 엄마는 알아.'];
-  const L = (Array.isArray(lines) ? E.shuffle(lines.slice()).slice(0, 2) : [lines]).map((x, i) => [1.5 + i * 2.2, 'c', typeof x === 'string' ? x : x.text]);
+  const lines = (imHas('IM_LINES') && IM_LINES.mom) || ['반찬 보냈다~ 총무님한테 받아.', '올해는 꼭 될 거야. 엄마는 알아.', '아빠가 네 달력에 동그라미 쳐 놨더라.', '힘들면 언제든 내려와.'];
+  const L = [`${imVoc(S)}, 밥은 먹고 다니니?`].concat(Array.isArray(lines) ? E.shuffle(lines.slice()).slice(0, 1) : [lines]).map((x, i) => [1.5 + i * 2.2, 'c', typeof x === 'string' ? x : x.text]);
   L.push([L.length * 2.2 + 1.8, 'm', '응… 나 잘 지내. 걱정 마.']);
   E.runMinis([E.phoneMini('엄마', L, { end: L.length * 2.2 + 3.6 })], () => { imApply(E, { mental: 10, min: 15 }, '엄마 목소리'); });
 }
@@ -4914,7 +5099,7 @@ function imRunEvent(E, id) {
   if (id === 'applyDeadline' && S.applied) return;
   if (id === 'lowBalance' && S.money >= 30) return;
   if (id === 'chuseok' && S.flags.chuseok) return;
-  const intro = (ev.lines || []).map(([w, x]) => ({ who: imWho(w), text: x }));
+  const intro = (ev.lines || []).map(([w, x]) => ({ who: imWho(w), text: w === '엄마' && /^(밥은|목소리가)/.test(x) ? `${imVoc(S)}, ${x}` : x }));
   const opts = (ev.choices || []).map((c, i) => {
     const cost = c.cost || {}, gain = c.gain || {};
     const tags = [];
@@ -4990,8 +5175,10 @@ const imPerf1 = (sk, mini, cond, notes) => Math.min(1, 0.66 * sk / 100 + 0.24 * 
 function imExam1Start(E, s) {
   const S = E.G.S, t = imTrackOf(E), parts = imExam1Parts(E), res = { parts: [], score: 0 };
   const cond = imCond(S);
-  const qs = imQsFor(E, imTrackPools(t), 12);
-  const minis = [E.cardMini('1차 시험', `${t.name} · ${imLevel(t) === '초등' ? '11월 초 토요일' : '11월 넷째 토요일'} · 아날로그 시계만`, 'urgent', 'exam')];
+  const qs = imPickQs(E, imTrackPools(t), 12, { hard: true, reask: 2 }), qt = imQuizTime(E);
+  const dt = (imMonths()[IM_MI.EXAM1] || {}).dates || {};
+  const minis = [imMini(E, 'imTicketMini', { name: imName(S), no: S.examNo, subject: imTrackName(t), date: (imLevel(t) === '초등' ? dt.e : dt.s) || '2026-11-28(토)', place: `${S.region || '서울'} ○○고등학교 제${1 + (Number(S.examNo) % 12)}시험실`, level: imLevel(t) },
+    () => E.cardMini('1차 시험', `수험표 · ${imName(S)} · 수험번호 ${S.examNo} · ${t.name}`, 'urgent', 'exam'))];
   parts.forEach((p, i) => {
     const fin = (sc) => {
       const sk = imPartSkill(E, p), perf = imPerf1(sk, E.clamp(sc, 0, 1), cond, S.notes) * (0.97 + Math.random() * 0.06);
@@ -5002,7 +5189,7 @@ function imExam1Start(E, s) {
     if (p.at) { cm.board = `${i + 1}교시 ${p.label} ${p.at}~${E.hm(E.T(p.at) + (p.min || 60))}`; cm.clock = E.T(p.at); }
     minis.push(cm);
     if ((p.mini || (i === 0 ? 'essay' : 'quiz')) === 'essay') minis.push(imMini(E, 'imEssayMini', { prompt: p.prompt || (t.essay || null), track: t.id, exam: true, bg: 'exam', onEnd: fin }, () => imQuizFallback(E, imQsFor(E, 'edu', 4), p.label, fin)));
-    else minis.push(imQuiz(E, { qs: qs.slice((i - 1) * 6, (i - 1) * 6 + 6).length >= 3 ? qs.slice((i - 1) * 6, (i - 1) * 6 + 6) : imQsFor(E, imTrackPools(t), 6), title: p.label, sub: '기입형 · 서술형 · 문항당 5초', time: 5, count: 6, hard: true, exam: true, bg: 'exam', onEnd: fin }));
+    else minis.push(imQuiz(E, { qs: qs.slice((i - 1) * 6, (i - 1) * 6 + 6).length >= 3 ? qs.slice((i - 1) * 6, (i - 1) * 6 + 6) : imPickQs(E, imTrackPools(t), 6, { hard: true, reask: 1 }), title: p.label, sub: `기입형 · 서술형 · 문항당 ${qt}초`, time: qt, count: 6, hard: true, exam: true, bg: 'exam', onEnd: (sc, m) => { imNoteWrong(E, m); fin(sc); } }));
   });
   E.statAdd('hp', -10);
   E.runMinis(minis, () => {
@@ -5063,7 +5250,7 @@ function imApplyQuest(E, q) {
 
 /* ---------- 12. 발표 · 엔딩 · N수 ---------- */
 function imRefresh(E, pass, label, done) {
-  const m = imMini(E, 'imRefreshMini', { pass, label, onEnd: () => {} }, () => E.cardMini(pass ? '합격' : '불합격', label, pass ? 'class' : 'tense', 'result', 6));
+  const S = E.G.S, m = imMini(E, 'imRefreshMini', { pass, label, name: S.name || '', no: S.examNo || '', onEnd: () => {} }, () => E.cardMini(pass ? '합격' : '불합격', label, pass ? 'class' : 'tense', 'result', 6));
   E.runMinis([E.cardMini(`${label} 합격자 발표`, '오전 10:00 · 채용 시스템 → 마이페이지', 'urgent', 'result', 3), m], done);
 }
 function imEnding(E, kind) { E.G.S.final = kind; E.finalCard(); }
@@ -5086,7 +5273,8 @@ function imMonthStart(E, d) {
   if (S.notes > 0 && mi > 0) S.notes -= 1;
   // 컨디션 회복 (한 달의 잠)
   const regen = (IM_ROOMS[S.room] || IM_ROOMS.nowin).regen;
-  if (mi > 0) {
+  const firstMonth = S.nth === 1 && mi === (S.startMi || 0);
+  if (mi > 0 && !firstMonth) {
     S.hp = Math.round(E.clamp(S.hp * 0.4 + 50 - (S.flags.allnight ? 10 : 0), 30, 100));
     S.mental = Math.round(E.clamp(S.mental * 0.5 + 28 + regen - S.burnout * 0.15, 15, 100));
     S.burnout = E.clamp(S.burnout - 8 - regen * 0.5, 0, 100);
@@ -5094,7 +5282,7 @@ function imMonthStart(E, d) {
   }
   // 고정 지출
   if (mi < IM_MI.LAST || S.nth > 1) {
-    const allow = mi === 0 && S.nth === 1 ? 0 : Math.max(40, imPrice('allowance', 80) - (S.nth - 1) * 15);
+    const allow = firstMonth && mi === 0 ? 0 : Math.max(40, imPrice('allowance', 80) - (S.nth - 1) * 15); // 2월 입성 첫 달만 송금 없음 (짐 풀고 학원 등록 전)
     if (allow) { imMoney(E, allow, '부모님 송금'); lines.push(`부모님 송금 +${allow}만`); }
     const rent = S.room === 'win' ? imPrice('rentWindow', 36) : imPrice('rentNoWindow', 32); imMoney(E, -rent, '고시원 월세'); lines.push(`월세 −${rent}만 (${IM_ROOMS[S.room].short})`);
     if (mi >= 1 && mi <= IM_MI.APPLY) { const ac = imPrice('academyMonth', 20); imMoney(E, -ac, '학원비'); lines.push(`학원비 −${ac}만`); }
@@ -5113,7 +5301,7 @@ function imOnDayStart(d, E, quiet) {
   // 번아웃 휴식 달
   if (S.rest) {
     S.rest = false; S.flags.rested = (S.flags.rested || 0) + 1;
-    E.runMinis([E.cardMini('번아웃 · 쉬어가는 달', '본가에서 한 달 · 공부 금지', null, 'station', 5), E.phoneMini('엄마', [[1.5, 'c', '아무 생각 말고 푹 자.'], [4, 'c', '시험은 내년에도 있어. 너는 하나야.'], [6.5, 'm', '…응. 고마워 엄마.']], { end: 9 })], () => {
+    E.runMinis([E.cardMini('번아웃 · 쉬어가는 달', '본가에서 한 달 · 공부 금지', null, 'station', 5), E.phoneMini('엄마', [[1.5, 'c', `${imVoc(S)}, 아무 생각 말고 푹 자.`], [4, 'c', '시험은 내년에도 있어. 너는 하나야.'], [6.5, 'm', '…응. 고마워 엄마.']], { end: 9 })], () => {
       S.mental = 72; S.hp = 92; S.burnout = 10; Object.keys(S.sk).forEach((k) => { S.sk[k] = Math.max(0, S.sk[k] - 2); });
       imAlbum(E, '🛏️', '본가 내 방 천장'); E.G.min = E.T('22:30'); E.endDay(false);
     });
@@ -5137,7 +5325,7 @@ function imOnDayStart(d, E, quiet) {
     imRefresh(E, !!e2.pass, '최종', () => {
       if (!e2.pass) return imEnding(E, 'fail2');
       imAlbum(E, '🌸', `${S.year + 1}년 2월, 최종 합격`);
-      E.runMinis([E.phoneMini('엄마', [[1.5, 'm', '엄마… 나 붙었어.'], [3.6, 'c', '…뭐? 진짜? 진짜로?'], [6, 'c', '아이고 우리 딸… 고생했다, 고생 많았어…'.replace('딸', S.gender === 'm' ? '아들' : '딸')], [8.6, 'm', '응… 엄마 덕분이야.']], { end: 11 })], () => imEnding(E, 'pass'));
+      E.runMinis([E.phoneMini('엄마', [[1.5, 'm', '엄마… 나 붙었어.'], [3.6, 'c', `…뭐? ${imVoc(S)}, 진짜? 진짜로?`], [6, 'c', `아이고 우리 ${imKid(S)}… 고생했다, 고생 많았어…`], [8.6, 'm', '응… 엄마 덕분이야.']], { end: 11 })], () => imEnding(E, 'pass'));
     });
     return;
   }
@@ -5147,14 +5335,130 @@ function imOnDayStart(d, E, quiet) {
     return;
   }
   const intro = d.intro && d.intro.length ? d.intro.map((l) => (typeof l === 'string' ? { who: '나', text: l } : Object.assign({}, l))) : imDefaultIntro(E, mi);
-  if (intro.length) E.say(intro, () => E.sfx.chime());
+  const runIntro = () => { if (intro.length) E.say(intro, () => E.sfx.chime()); };
+  const first = S.nth === 1 && mi === (S.startMi || 0);
   if (mi === IM_MI.ARRIVE && S.nth === 1) imAlbum(E, '🧳', '노량진역, 캐리어 두 개');
+  else if (first) imAlbum(E, '🧳', `${imStartOf(mi).label} · 캐리어 하나`);
+  // 첫 달: 입성 이야기 카드 → 지도 투어 → 인트로 대사 (투어는 한 번만)
+  if (first && !S.flags.toured) return imCard(E, imStoryHTML(E), () => imTour(E, runIntro));
+  runIntro();
+}
+function imStoryHTML(E) {
+  const S = E.G.S, t = imTrackOf(E), o = imStartOf(S.startMi || 0), esc = E.esc;
+  const left = Math.max(0, IM_MI.EXAM1 - (S.startMi || 0));
+  const sk = imSkillDefs(t).filter((d) => !imIsSecond(d)).map((d) => `${esc(d.label)} ${Math.round(S.sk[d.key] || 0)}`).join(' · ');
+  return `<div class="eb">${esc(o.label)} · ${esc(o.sub)} · ${esc(imName(S))}</div><h2 style="font-size:29px">${esc(o.title)}</h2>
+    <p class="tag">${o.story.map(esc).join('<br>')}</p>
+    <div class="brief"><div>시작 실력 — ${sk}</div><div>통장 ${Math.round(S.money)}만 · 체력 ${Math.round(S.hp)} · 멘탈 ${Math.round(S.mental)}${S.startMi > IM_MI.TO ? ` · 사전예고 TO ${S.to}명` : ''}</div><div>${left ? `1차 시험까지 ${left}달` : '오늘이 1차 시험일!'} · 난이도 ${'★'.repeat(o.diff)}${'☆'.repeat(5 - o.diff)} ${esc(o.diffShort)}</div></div>
+    <p class="small">계속을 누르면 노량진 한 바퀴 둘러보기 (건너뛰기 가능)</p>`;
+}
+/* ---------- 13-1. 지도 투어 (첫 달 · 자유 시간 전) — 엔진 E.cine + G.camTarget ---------- */
+function imTourStops(E) {
+  const t = imTrackOf(E);
+  const L = [
+    ['door:room', '🛏️', '다온 고시원 · 내 방', '밤엔 침대에서 소등 · 공용 주방 밥·김치·라면은 무료', ['kitchen']],
+    ['door:academy', '📚', '한빛임용 · 강의실 / 모의고사실', '시간표 시각에 맞춰 입실! 늦으면 맨 뒷자리 · 6월부터 매달 모의고사', ['door:mock']],
+    ['cupbap', '🍛', '컵밥거리', '4,000원 한 끼로 체력 회복 · 사장님 수다는 덤'],
+    ['diner', '🍱', '엄마손 고시식당', '한식뷔페 한 끼 · 체력을 크게 채운다', null, '고시식당'],
+    ['door:reading', '💡', '24H 독서실', '자유 시간 자습 · 기출 퀴즈와 암기 카드로 약한 과목 +'],
+    ['door:study', '👥', '스터디룸 「공감」', '스터디 시간엔 지은·민호·서연과 기출 문답'],
+    ...(imIsPractice(t) ? [['door:practice', '🎹', '실기 연습실', '실기 교과는 매일 연습 · 레슨·대관비가 든다']] : []),
+    ['print', '🖨️', '24시 정성인쇄', '요약노트 제본 → 두 달 동안 공부 효율 +20%', null, '인쇄소'],
+    ['store', '🏪', '편의점', '커피·삼각김밥 · 통장이 바닥나면 야간 알바', null, '편의점'],
+    ['park', '🌳', '사육신공원 · 한강', '멘탈이 바닥이면 산책 · 번아웃이 풀린다', ['river']],
+    ['station', '🚉', '노량진역', '시험 날엔 여기서 시험장으로 · 명절엔 집으로'],
+  ];
+  return L.map(([at, icon, name, cap, more, mapLabel]) => {
+    const pts = [at].concat(more || []).map((k) => E.posOf(k)).filter(Boolean);
+    if (!pts.length) return null;
+    return { at, icon, name, cap, pts, mapLabel, x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
+  }).filter(Boolean);
+}
+function imTour(E, done) {
+  const S = E.G.S, stops = imTourStops(E), HOLD = 2.3, MAP = 3;
+  let btn = null;
+  const finish = () => { if (S.flags.toured) return; S.flags.toured = true; E.endCine(); };
+  const ok = E.cine({
+    i: 0, t0: 0, phase: 'stops',
+    enter() {
+      this.go(0);
+      try {
+        btn = document.createElement('button'); btn.type = 'button'; btn.className = 'imskip'; btn.textContent = '건너뛰기 ⏭';
+        btn.style.cssText = 'position:absolute;z-index:6;top:calc(78px + env(safe-area-inset-top,0px));right:10px;font:800 13px var(--f-body);color:#12152A;background:#FFD54A;border:0;border-radius:12px;padding:8px 12px;box-shadow:0 3px 0 #9B6B00;cursor:pointer';
+        btn.addEventListener('click', (e) => { e.stopPropagation(); E.audioInit(); E.sfx.key(); finish(); });
+        E.$('stage').appendChild(btn);
+      } catch (e) { btn = null; }
+    },
+    exit() { if (btn && btn.parentNode) btn.parentNode.removeChild(btn); btn = null; },
+    onEnd() { E.toast('이제 자유! 바닥을 탭하면 그곳으로 걸어가요', 'ok'); if (done) done(); },
+    go(i) {
+      this.i = i; this.t0 = this.t;
+      if (i >= stops.length) { this.phase = 'map'; E.G.camTarget = null; E.sfx.page(); if (btn) btn.style.display = 'none'; return; }
+      const st = stops[i]; E.G.camTarget = { x: st.x, y: st.y, speed: 4.5 }; E.sfx.step();
+    },
+    next() { if (this.phase === 'map') return finish(); this.go(this.i + 1); },
+    update() { const el = this.t - this.t0; if (this.phase === 'map' ? el >= MAP : el >= HOLD) this.next(); },
+    tap() { E.sfx.key(); this.next(); },
+    key(k) { if (k === 'Escape') finish(); else if ([' ', 'Enter', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'd', 'w', 'a'].includes(k)) this.next(); },
+    drawWorld(g, E2, time) {
+      if (this.phase !== 'stops') return;
+      const st = stops[this.i]; if (!st) return;
+      const k = E2.clamp((this.t - this.t0) / 0.5, 0, 1);
+      st.pts.forEach((p) => {
+        const r = 22 + Math.sin(time * 6) * 3;
+        g.globalAlpha = k * 0.35; g.fillStyle = '#FFD54A'; g.beginPath(); g.arc(p.x, p.y, r + 10, 0, 7); g.fill();
+        g.globalAlpha = k; g.strokeStyle = '#FFD54A'; g.lineWidth = 4; g.beginPath(); g.arc(p.x, p.y, r, 0, 7); g.stroke();
+        g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.arc(p.x, p.y, r + 6, 0, 7); g.stroke();
+      });
+      const p0 = st.pts[0], lbl = `${st.icon} ${E2.locName(st.at) || st.name}`;
+      g.font = `14px ${E2.FD}`; const w = g.measureText(lbl).width + 16;
+      g.fillStyle = 'rgba(15,18,36,.88)'; E2.rr(p0.x - w / 2, p0.y - 62, w, 22, 8); g.fill();
+      g.fillStyle = '#FFD54A'; g.textAlign = 'center'; g.fillText(lbl, p0.x, p0.y - 46);
+      g.globalAlpha = 1;
+    },
+    draw(g, E2, time) {
+      const VW = E2.VW, VH = E2.VH;
+      if (this.phase === 'map') {
+        const r = E2.drawFullMap(time, '곧 시작! 오른쪽 위 미니맵을 누르면 언제든 이 지도'), k = E2.clamp((this.t - this.t0) / 0.4, 0, 1);
+        g.globalAlpha = k;
+        // 투어 순서 번호 + 지도에 이름이 없는 곳만 이름표 (문 · 거리 이름은 지도에 이미 있음)
+        stops.forEach((st, n) => {
+          const p = st.pts[0], x = r.ox + (p.x / E2.TS) * r.sc, y = r.oy + (p.y / E2.TS) * r.sc;
+          if (st.mapLabel) { const lb = `${st.icon} ${st.mapLabel}`; g.font = `800 10px ${E2.FB}`; const w = g.measureText(lb).width + 8; g.fillStyle = 'rgba(255,253,244,.94)'; E2.rr(x + 8, y - 7, w, 14, 5); g.fill(); g.fillStyle = '#12152A'; g.textAlign = 'left'; g.fillText(lb, x + 12, y + 3.5); }
+          g.fillStyle = '#FF9F6B'; g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill(); g.strokeStyle = '#12152A'; g.lineWidth = 1.5; g.stroke();
+          g.fillStyle = '#12152A'; g.font = `800 9px ${E2.FB}`; g.textAlign = 'center'; g.fillText(String(n + 1), x, y + 3.2);
+        });
+        g.fillStyle = '#FFD54A'; g.font = `15px ${E2.FD}`; g.textAlign = 'center'; g.fillText(`${Math.max(1, Math.ceil(MAP - (this.t - this.t0)))}초 뒤 자유 시간 · 탭하면 바로 시작`, VW / 2, r.oy + E2.MH * r.sc + 46);
+        g.globalAlpha = 1;
+        return;
+      }
+      const st = stops[this.i]; if (!st) return;
+      const k = E2.clamp((this.t - this.t0) / 0.3, 0, 1), y0 = VH - 132, x = 12, w = VW - 24, h = 104;
+      g.fillStyle = 'rgba(15,18,36,.75)'; E2.rr(12, E2.hudBottom + 4, 172, 22, 8); g.fill();
+      g.fillStyle = '#FFD54A'; g.font = `13px ${E2.FD}`; g.textAlign = 'left'; g.fillText(`🗺️ 노량진 한 바퀴 · ${this.i + 1}/${stops.length}`, 20, E2.hudBottom + 20);
+      g.globalAlpha = k;
+      g.fillStyle = 'rgba(255,253,244,.97)'; E2.rr(x, y0, w, h, 14); g.fill();
+      g.strokeStyle = '#FFD54A'; g.lineWidth = 3; E2.rr(x, y0, w, h, 14); g.stroke();
+      g.font = `30px ${E2.FD}`; g.textAlign = 'center'; g.fillText(st.icon, x + 30, y0 + 44);
+      g.fillStyle = '#1B2340'; g.textAlign = 'left'; E2.fitText(st.name, w - 70, 19, E2.FD); g.fillText(st.name, x + 56, y0 + 32);
+      g.font = `800 12.5px ${E2.FB}`; const ls = E2.wrapText(st.cap, w - 70, g.font, 3); g.fillStyle = '#4A5675'; ls.forEach((l, j) => g.fillText(l, x + 56, y0 + 54 + j * 17));
+      for (let j = 0; j < stops.length; j++) { g.fillStyle = j <= this.i ? '#FF9F6B' : '#D5DAE6'; g.beginPath(); g.arc(VW / 2 - (stops.length - 1) * 6 + j * 12, y0 + h - 10, 3.2, 0, 7); g.fill(); }
+      g.globalAlpha = 1;
+      g.fillStyle = 'rgba(255,255,255,.7)'; g.font = `800 11px ${E2.FB}`; g.textAlign = 'center'; g.fillText('화면을 탭하면 다음 장소', VW / 2, y0 - 10);
+    },
+  });
+  if (!ok) { S.flags.toured = true; if (done) done(); }
 }
 function imDefaultIntro(E, mi) {
   const S = E.G.S, t = imTrackOf(E);
   if (mi === 0) return S.nth === 1
-    ? [{ who: '나', text: `노량진 도착. ${t.name} 임용, 올해 끝낸다.` }, { who: '고시원 총무', text: `${IM_ROOMS[S.room].name}이에요. 월세는 저한테 주시고요~ 밥·김치·라면은 무료!` }, { who: '나', text: '오른쪽 위 지도와 퀘스트부터 확인하자. A로 조사, ⚡로 뛰기.' }]
+    ? [{ who: '나', text: `노량진 도착. ${t.name} 임용, 올해 끝낸다.` }, { who: '고시원 총무', text: `${IM_ROOMS[S.room].name}이에요. 월세는 저한테 주시고요~ 밥·김치·라면은 무료!` }, { who: '나', text: '바닥을 탭하면 그곳으로 걸어간다. A로 조사, ⚡로 뛰기.' }]
     : [{ who: '나', text: `${imNth(S)}. 다시 2월, 다시 노량진.` }, { who: '고시원 총무', text: '어머, 또 왔네요. …이번엔 꼭 돼요.' }];
+  const late = S.nth === 1 && mi === (S.startMi || 0) ? [{ who: '나', text: `${imStartOf(mi).label}. ${t.name} 임용, ${mi >= IM_MI.EXAM1 ? '오늘 바로 시험이다.' : `남은 ${IM_MI.EXAM1 - mi}달에 끝낸다.`}` }, { who: '고시원 총무', text: `늦게 오셨네요~ ${IM_ROOMS[S.room].name}이에요. 월세는 저한테, 밥·김치·라면은 무료!` }, { who: '나', text: '바닥을 탭하면 그곳으로 걸어간다. A로 조사, ⚡로 뛰기.' }] : [];
+  return late.concat(imMonthIntro(E, mi));
+}
+function imMonthIntro(E, mi) {
+  const S = E.G.S;
   if (mi === IM_MI.EXAM1) return [{ who: '나', text: '오늘이다. 수험표, 신분증, 아날로그 시계, 컴퓨터용 사인펜… 아니, 검정 볼펜.' }, { who: '나', text: '노량진역으로 가서 시험장으로!' }];
   if (mi === IM_MI.EXAM2) return [{ who: '나', text: '2차 시험 날. 구상실 → 평가실. 이름 말하면 안 된다.' }];
   if (mi === IM_MI.APPLY) return [{ who: '나', text: '원서 접수 마감이 오늘 18시! 내 방 노트북으로 접수부터.' }];
@@ -5228,6 +5532,10 @@ function imNpcChat(n, E) {
   const f = imFn('imNpcLines');
   if (f) { try { L = f(n.id, E); } catch (e) { L = null; } }
   if (/^mate/.test(n.id)) { D.mates = D.mates || {}; if (!D.mates[n.id]) { D.mates[n.id] = 1; S.mates[n.id] = E.clamp((S.mates[n.id] || 40) + 4, 0, 100); imMental(E, 3); } }
+  if (S.name && /^mate[123]$/.test(n.id) && Math.random() < 0.4) {
+    const nm = S.name, ML = { mate1: [`${nm} 씨, 오늘 스터디 키워드 다섯 개씩 뽑아 와요!`, `${nm} 씨 요약노트 좀 보여줘요. 제 건 엉망이에요.`], mate2: [`${nm} 씨, 컵밥 먹으러 갈래요? 오늘은 내가 계란 쏠게.`, `${nm} 씨는 ${imNth(S)}랬죠? 이번엔 같이 끝내요.`], mate3: [`${nm} 씨! 오늘 같이 독서실 가요?`, `${nm} 씨 보면 저도 힘이 나요. 진짜로요.`] }[n.id];
+    L = [{ who: n.name, text: E.rnd(ML) }];
+  }
   if (n.id === 'owner' && S.money < 15 && !S.flags.ownerHelp) { S.flags.ownerHelp = 1; return [{ who: n.name, text: '학생, 이번 달 월세는 다음 달에 같이 줘요. 힘내요.' }, { who: '나', text: '(울컥) …감사합니다.' }]; }
   if (!L) return null;
   return (Array.isArray(L) ? L : [L]).map((l) => (typeof l === 'string' ? { who: n.name, text: l } : Object.assign({ who: n.name }, l)));
@@ -5243,7 +5551,7 @@ function imOnQuest(q, it, E) {
 }
 function imQuestsFor(E, mi) {
   const S = E.G.S, L = [];
-  if (mi === IM_MI.ARRIVE) {
+  if (mi === IM_MI.ARRIVE || (S.nth === 1 && mi === (S.startMi || 0))) {
     L.push({ id: 'q-rent', title: '총무님께 월세 내기', at: 'owner', icon: '🏠', color: IM_COL.hr, cat: '생활' });
   }
   if (mi === IM_MI.APPLY && !S.applied) L.push({ id: 'q-apply', title: '1차 원서 접수', at: 'door:room', icon: '📝', color: IM_COL.hot, cat: '마감', dueAt: '18:00' });
@@ -5281,7 +5589,7 @@ function imDdayText(E) {
 function imHudLines(E) {
   const S = E.G.S, t = imTrackOf(E), d = E.day;
   const b = S.burnout >= 70 ? { text: `🔥 번아웃 ${Math.round(S.burnout)}% · 멘탈 소모 ↑ · 쉬어야 해`, color: IM_COL.hot } : null;
-  return [`${t.icon || ''} ${t.name} · ${imNth(S)} · ${d.month} ${d.title}`, imSkillLine(E, true), b || `${imDdayText(E)} · 번아웃 ${Math.round(S.burnout)}%${S.notes > 0 ? ' · 📚 요약노트' : ''}`];
+  return [`${t.icon || ''} ${S.name ? S.name + ' · ' : ''}${t.name} · ${imNth(S)} · ${d.month} ${d.title}`, imSkillLine(E, true), b || `${imDdayText(E)} · 번아웃 ${Math.round(S.burnout)}%${S.notes > 0 ? ' · 📚 요약노트' : ''}`];
 }
 function imSideNext(E) {
   const G = E.G, S = G.S, nx = E.nextSlot(), m = G.min;
@@ -5307,6 +5615,7 @@ function imLogHTML(E) {
   const mates = ['mate1', 'mate2', 'mate3'].map((k, i) => `${(imHas('IM_MAP_MATES') && IM_MAP_MATES[i] ? IM_MAP_MATES[i].name : ['지은', '민호', '서연'][i])} ${'♥'.repeat(Math.max(1, Math.round((S.mates[k] || 40) / 25)))}`).join(' · ');
   return `<h4>실력 · ${esc(t.name)} (${imNth(S)})</h4><div class="sheet" style="padding:4px 2px">${sk}</div>
     <div class="perk">TO <b>${S.to || '?'}</b>명 · 예상 컷 <b>${S.cut}</b> · 번아웃 ${Math.round(S.burnout)}% · 요약노트 ${S.notes ? `${S.notes}달 남음` : '없음'}<br>방: ${esc(IM_ROOMS[S.room].name)} · 스터디원 ${mates}</div>
+    <h4>오답노트 (${(S.wrongQ || []).length})</h4>${(S.wrongQ || []).length ? `<div style="background:#fff;border:1px solid #C9D3E3;border-radius:10px;padding:7px 9px;font-size:11.5px;line-height:1.55;color:#1B2340;text-align:left">${S.wrongQ.slice(-4).reverse().map(imQidText).filter(Boolean).map((x) => `· ${esc(x.q)} → <b>${esc(x.a)}</b>`).join('<br>')}<br><span style="color:#6A7393">틀린 문제는 다음 퀴즈·모의고사에 다시 나와요. 맞히면 졸업!</span></div>` : '<div class="row">틀린 문제가 여기 모여요 — 다음 퀴즈에 다시 나와요</div>'}
     <h4>모의고사 기록</h4>${mock ? `<table class="ng"><tr><th>월</th><th>점수</th><th>등수</th><th>예상 1차</th></tr>${mock}</table>` : '<div class="row">6월부터 매달 모의고사!</div>'}
     <h4>가계부 · 통장 ${S.money}만</h4>${led ? `<table class="ng">${led}</table>` : ''}
     <h4>앨범 (${S.album.length})</h4><div>${album || '<div class="row">아직 사진이 없어요</div>'}</div>`;
@@ -5347,7 +5656,9 @@ function imBriefHTML(d, E) {
   if (t.id === 'e-sp' && mi >= 1 && mi <= IM_MI.APPLY) extra.push('초등 특수: 일반 초등 교육과정 + 특수교육학 연강.');
   const lines = (d.brief || []).concat(extra);
   const sched = E.daySched().length ? E.schedTable(d) : '<p class="small">정해진 일정 없음</p>';
-  return `<div class="eb">${esc(imNth(S))} · ${esc(d.month)} · ${mi + 1}/13 · ${esc(t.name)}</div><h2>${esc(d.title)}</h2>
+  const st0 = S.nth === 1 ? S.startMi || 0 : 0;
+  if (S.nth === 1 && mi === st0 && st0 > 0) extra.unshift(`${imStartOf(st0).label} · ${imStartOf(st0).sub} — 첫 달은 노량진 한 바퀴 둘러보기부터.`);
+  return `<div class="eb">${S.name ? esc(S.name) + ' · ' : ''}${esc(imNth(S))} · ${esc(d.month)} · ${mi - st0 + 1}/${13 - st0} · ${esc(t.name)}</div><h2>${esc(d.title)}</h2>
     <div class="brief">${lines.map((x) => `<div>${esc(x)}</div>`).join('') || '<div>버티는 한 달.</div>'}</div>
     ${sched}
     <p class="small">통장 ${S.money}만 · 체력 ${Math.round(S.hp)} · 멘탈 ${Math.round(S.mental)} · ${esc(imSkillLine(E, true))}</p>
@@ -5357,8 +5668,8 @@ function imTitleHTML(E, o) {
   const sv = o.save, S = sv && sv.S, t = S && S.track ? imTrackById(S.track) : null;
   return `<h1 class="logo">노량진 D-day<small>임고생 1년 RPG</small></h1>
     <p class="tag">고시원 한 평, 컵밥 한 그릇, 모의고사 한 장.<br>한 달이 하루처럼 지나가는 노량진의 1년 — 끝에서 엄마한테 전화할 수 있을까?</p>
-    <div class="how"><div class="a"><b>하루</b><span>하루 = <strong>한 달</strong> · 07시 기상 → 강의·스터디·모의고사 → 소등</span></div><div class="b"><b>이동</b><span>화면을 끌어서 · <strong>A</strong> 조사 · <strong>⚡</strong> 뛰기</span></div><div class="c"><b>공부</b><span>미니게임 정확도 = 실력 · <strong>← ↑ →</strong></span></div><div class="d"><b>버티기</b><span>체력 · 멘탈 · 통장(만원) — 번아웃 주의</span></div></div>
-    <div class="col"><button class="btn" type="button" data-go="start">새 수험 생활 ▶</button>${o.canContinue ? `<button class="btn sub" type="button" data-go="continue">이어하기 · ${t ? E.esc(t.name) + ' · ' : ''}${E.esc(imMonthLabel(sv.idx))}${S && S.nth > 1 ? ' · ' + imNth(S) : ''}</button>` : ''}</div>
+    <div class="how"><div class="a"><b>하루</b><span>하루 = <strong>한 달</strong> · 07시 기상 → 강의·스터디·모의고사 → 소등</span></div><div class="b"><b>이동</b><span><strong>탭</strong> = 그곳으로 걷기 · 끌기 = 조이스틱 · <strong>A</strong> 조사 · <strong>⚡</strong> 뛰기</span></div><div class="c"><b>공부</b><span>미니게임 정확도 = 실력 · <strong>← ↑ →</strong></span></div><div class="d"><b>버티기</b><span>체력 · 멘탈 · 통장(만원) — 번아웃 주의</span></div></div>
+    <div class="col"><button class="btn" type="button" data-go="start">새 수험 생활 ▶</button>${o.canContinue ? `<button class="btn sub" type="button" data-go="continue">이어하기 · ${S && S.name ? E.esc(S.name) + ' · ' : ''}${t ? E.esc(t.name) + ' · ' : ''}${E.esc(imMonthLabel(sv.idx))}${S && S.nth > 1 ? ' · ' + imNth(S) : ''}</button>` : ''}</div>
     <p class="small">${o.best ? `최고 기록 ${o.best.toLocaleString()}점` : '실제 학원·강사 이름은 나오지 않아요 · 수험생 모두를 응원합니다'}</p>`;
 }
 function imScore(E) {
@@ -5369,14 +5680,17 @@ function imScore(E) {
 }
 function imFinalHTML(E, o) {
   const S = E.G.S, t = imTrackOf(E), esc = E.esc, e1 = S.exam1, e2 = S.exam2;
-  const K = { pass: ['최종 합격', imLevel(t) === '초등' ? '3월 1일 발령… 어쩌면 발령 대기. 그래도, 선생님이다.' : '3월 1일, 교단에 선다.', '🌸'], fail2: ['2차 탈락', '1차는 붙었다. 마지막 문턱에서 0.몇 점.', '🥀'], fail1: ['1차 탈락', '컷까지 몇 점. 정답은 끝내 공개되지 않았다.', '🍂'], noapply: ['응시하지 못한 해', '원서 마감을 놓친 1년. 실력은 남았다.', '🗓️'] }[S.final] || ['수험 생활 끝', '', '📷'];
+  const sn = S.name ? `${S.name} 선생님, ` : '';
+  const K = { pass: ['최종 합격', imLevel(t) === '초등' ? `${sn}3월 1일 발령… 어쩌면 발령 대기. 그래도, 선생님이다.` : `${sn}3월 1일, 교단에 선다.`, '🌸'], fail2: ['2차 탈락', '1차는 붙었다. 마지막 문턱에서 0.몇 점.', '🥀'], fail1: ['1차 탈락', '컷까지 몇 점. 정답은 끝내 공개되지 않았다.', '🍂'], noapply: ['응시하지 못한 해', '원서 마감을 놓친 1년. 실력은 남았다.', '🗓️'] }[S.final] || ['수험 생활 끝', '', '📷'];
   const alb = S.album.filter((a) => a.nth === S.nth), album = alb.length > 9 ? alb.slice(0, 3).concat(alb.slice(-6)) : alb;
   const pol = album.map((a, i) => `<div style="background:#FFFDF4;color:#1B2340;border-radius:4px;padding:6px 5px 8px;box-shadow:0 4px 10px rgba(0,0,0,.35);transform:rotate(${((i * 37) % 9) - 4}deg)"><div style="background:#2A3358;border-radius:2px;height:46px;display:grid;place-items:center;font-size:26px">${a.icon}</div><div style="font-size:9.5px;font-weight:800;margin-top:4px;line-height:1.25">${esc(a.text)}</div><div style="font-size:8.5px;color:#6A7393">${esc(a.label)}</div></div>`).join('');
   const rows = [];
   if (e1 && !e1.noApply) rows.push(`<div>1차 ${e1.score}점 / 컷 ${e1.cut}${e1.fail40 ? ' · 과락' : ''} — ${e1.parts.map((p) => `${esc(p.label)} ${p.got}/${p.pts}`).join(' · ')}</div>`);
   if (e2) rows.push(`<div>2차 ${e2.score}점 · 합계 ${e2.total} / 최종 컷 ${e2.cut} — ${e2.parts.map((p) => `${esc(p.label)} ${p.got}/${p.pts}`).join(' · ')}</div>`);
   const again = S.final !== 'pass';
-  return `<div class="eb">${esc(t.name)} · ${imNth(S)} · ${S.year + 1}학년도 임용</div><h2>${K[2]} ${K[0]}</h2><p class="tag">${K[1]}</p>
+  const from = S.nth === 1 && S.startMi ? ` · ${imStartOf(S.startMi).label}` : '';
+  return `<div class="eb">${S.name ? esc(S.name) + ' · ' : ''}${esc(t.name)} · ${imNth(S)}${esc(from)} · ${S.year + 1}학년도 임용</div><h2>${K[2]} ${K[0]}</h2><p class="tag">${esc(K[1])}</p>
+    <p class="small" style="margin:4px 0 0">📷 ${esc(imName(S) === '나' ? '나의' : imName(S) + '의')} 노량진 앨범</p>
     <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 4px 6px">${pol || '<div>사진 없음</div>'}</div>
     <div class="brief">${rows.join('')}<div>${esc(imSkillLine(E))}</div></div>
     <div class="stats"><div>점수<b>${o.score.toLocaleString()}</b></div><div>공부<b>${Math.round(S.totalStudy / 60)}h</b></div><div>통장<b>${Math.round(S.money)}만</b></div></div>
@@ -5390,7 +5704,7 @@ function imPickCard(E) {
   const L = imTracks();
   if (P.step === 1) {
     const lv = [['초등', '🏫', '교대 졸업 · 전 교과 + 교직논술 · 2차 영어'], ['중등', '🎓', '교육학 + 전공 A/B · 과목 20여 개']];
-    E.showCard(`<div class="eb">새 수험 생활 · 1/3</div><h2>어느 임용을 준비하나요?</h2>
+    E.showCard(`<div class="eb">새 수험 생활 · 1/4</div><h2>어느 임용을 준비하나요?</h2>
       <div class="gsel">${lv.map(([k, ic, d]) => `<button type="button" data-go="im-lv" data-v="${k}" class="${P.lv === k ? 'on' : ''}"><b style="font-size:26px">${ic}</b><br>${k}<br><small style="font-size:10px;color:var(--ink-2);font-weight:700">${esc(d)}</small></button>`).join('')}</div>
       <div class="rdesc">${P.lv === '초등' ? '<b>초등</b> — 교직논술 20 + 교육과정 A·B 80. 2차는 면접·수업실연에 <b>영어 수업실연·영어 면접</b>까지.<br><span>초등 특수를 고르면 특수교육학까지 같이 (번아웃 ↑).</span>' : '<b>중등</b> — 교육학 논술 20 + 전공 A 40 + 전공 B 40. 2차 지도안·수업실연·면접.<br><span>음악·미술·체육·과학은 실기 연습이 매일 추가돼요.</span>'}</div>
       <div class="col"><button class="btn" type="button" data-go="im-step" data-v="2">과목 고르기 ▶</button><button class="btn sub" type="button" data-go="title">처음 화면</button></div>`);
@@ -5400,26 +5714,47 @@ function imPickCard(E) {
     const list = L.filter((t) => imLevel(t) === P.lv);
     if (!P.track || !list.some((t) => t.id === P.track)) P.track = (list[0] || {}).id;
     const cur = imTrackById(P.track);
-    E.showCard(`<div class="eb">새 수험 생활 · 2/3 · ${esc(P.lv)}</div><h2>과목 선택</h2>
+    E.showCard(`<div class="eb">새 수험 생활 · 2/4 · ${esc(P.lv)}</div><h2>과목 선택</h2>
       <div class="rsel" style="margin-top:10px">${list.map((t) => `<button type="button" data-go="im-trk" data-v="${esc(t.id)}" class="${t.burnout > 1.1 || imIsPractice(t) ? 'sp' : ''} ${P.track === t.id ? 'on' : ''}"><b>${t.icon || '📘'}</b>${esc(t.short || t.name.replace(/\(.*\)/, ''))}<small>${esc(imIsPractice(t) ? '실기' : t.burnout > 1.1 ? '번아웃↑' : imSkillDefs(t).length + '과목')}</small></button>`).join('')}</div>
       <div class="rdesc"><b>${cur.icon || ''} ${esc(cur.name)}</b><br>${(cur.traits || []).map((x) => `· ${esc(x)}`).join('<br>')}<br><span>실력: ${imSkillDefs(cur).map((d) => esc(d.label)).join(' · ')}${cur.to ? ` · 작년 TO ${cur.to}명` : ''}</span></div>
       <div class="col"><button class="btn" type="button" data-go="im-step" data-v="3">이 과목으로 ▶</button><button class="btn sub" type="button" data-go="im-step" data-v="1">◀ 학교급 다시</button></div>`);
     return;
   }
   const cur = imTrackById(P.track);
-  E.showCard(`<div class="eb">새 수험 생활 · 3/3 · ${esc(cur.name)}</div><h2>나와 내 방</h2>
+  if (P.step === 4) return imStartCard(E);
+  const voc = (nm) => `엄마: “${imVoc({ name: imCleanName(nm), gender: P.gender })}, 밥은 먹고 다니니?”`;
+  E.showCard(`<div class="eb">새 수험 생활 · 3/4 · ${esc(cur.name)}</div><h2>나와 내 방</h2>
+    <label for="imName" style="display:block;text-align:left;font-size:12px;color:var(--ink-2);font-weight:800;margin:10px 2px 3px">이름 · 엄마와 스터디원이 불러 줄 이름 (최대 8자)</label>
+    <input id="imName" type="text" maxlength="8" value="${esc(P.name || '')}" placeholder="비워 두면 ‘나’" autocomplete="off" enterkeyhint="done" style="width:100%;box-sizing:border-box;font:800 16px var(--f-body);padding:9px 12px;border-radius:12px;border:2px solid var(--line);background:#1A2040;color:var(--ink);outline-color:var(--chalk)">
+    <div id="imNameHint" style="font-size:11.5px;color:var(--chalk);text-align:left;margin:4px 2px 0;font-weight:700">${esc(voc(P.name))}</div>
     <div class="gsel"><button type="button" data-go="im-sex" data-v="f" class="${P.gender === 'f' ? 'on' : ''}">🙋‍♀️ 여</button><button type="button" data-go="im-sex" data-v="m" class="${P.gender === 'm' ? 'on' : ''}">🙋‍♂️ 남</button></div>
     <div class="gsel" style="margin-top:0">${Object.keys(IM_ROOMS).map((k) => `<button type="button" data-go="im-room" data-v="${k}" class="${P.room === k ? 'on' : ''}">${k === 'win' ? '🪟' : '🧱'} ${esc(IM_ROOMS[k].name)}<br><small style="font-size:10.5px;font-weight:700;color:var(--ink-2)">월 ${IM_ROOMS[k].rent}만</small></button>`).join('')}</div>
-    <div class="rdesc"><b>다온 고시원 · ${esc(IM_ROOMS[P.room].name)}</b><br>${esc(IM_ROOMS[P.room].desc)}<br><span>시작 통장 180만 · 매달 송금 80만 (월세·학원·독서실 빼면 빠듯) · 밥·김치·라면 무료</span></div>
-    <div class="col"><button class="btn" type="button" data-go="im-begin">노량진 입성 ▶</button><button class="btn sub" type="button" data-go="im-step" data-v="2">◀ 과목 다시</button></div>`);
+    <div class="rdesc"><b>다온 고시원 · ${esc(IM_ROOMS[P.room].name)}</b><br>${esc(IM_ROOMS[P.room].desc)}<br><span>2월 입성 기준 통장 180만 · 매달 송금 80만 (월세·학원·독서실 빼면 빠듯) · 밥·김치·라면 무료</span></div>
+    <div class="col"><button class="btn" type="button" data-go="im-step" data-v="4">언제 입성할까? ▶</button><button class="btn sub" type="button" data-go="im-step" data-v="2">◀ 과목 다시</button></div>`);
+  const inp = E.$('card').querySelector('#imName'), hint = E.$('card').querySelector('#imNameHint');
+  if (inp) {
+    inp.addEventListener('input', () => { P.name = imCleanName(inp.value); if (hint) hint.textContent = voc(inp.value); });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+  }
+}
+function imStartCard(E) {
+  const esc = E.esc, P = imPick, cur = imTrackById(P.track), o = imStartOf(P.startMi || 0);
+  E.showCard(`<style>.imst{display:grid;gap:5px;margin:10px 0 0}.imst button{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:2px 8px;text-align:left;border:2px solid var(--line);background:#1A2040;color:var(--ink);border-radius:12px;padding:6px 10px;cursor:pointer;font-family:var(--f-body);min-width:0}.imst button b{font-family:var(--f-display);font-weight:400;font-size:17px;white-space:nowrap}.imst button em{font-style:normal;font-size:11.5px;font-weight:800;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.imst button i{font-style:normal;font-size:10.5px;font-weight:800;color:#FF9F6B;white-space:nowrap}.imst button small{grid-column:1/-1;font-size:11px;color:var(--ink-2);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.imst button.on{border-color:var(--chalk);background:#3A3420}.imst button.on b{color:var(--chalk)}</style>
+    <div class="eb">새 수험 생활 · 4/4 · ${esc(cur.name)}${P.name ? ' · ' + esc(P.name) : ''}</div><h2 style="font-size:28px">언제 노량진에 들어오나요?</h2>
+    <div class="imst">${IM_STARTS.map((x) => `<button type="button" data-go="im-start" data-v="${x.mi}" class="${(P.startMi || 0) === x.mi ? 'on' : ''}"><b>${esc(x.label)}</b><em>${esc(x.sub)}</em><i>${'★'.repeat(x.diff)}${'☆'.repeat(5 - x.diff)} ${esc(x.diffShort)}</i><small>${esc(x.flavor)}</small></button>`).join('')}</div>
+    <div class="rdesc"><b>${esc(o.label)} · ${esc(o.sub)}</b> — ${esc(o.diffText)}<br><span>${o.lv ? `학교·본가에서 해 온 공부: 1차 실력 약 ${o.lv}부터 (교과교육은 조금 덜)` : '실력 18부터 · 2월 한 달은 정착(튜토리얼)'} · 시작 통장 ${o.money}만${o.mi ? ' + 첫 달 송금' : ''}${o.mi >= IM_MI.EXAM1 ? ' · 원서는 미리 냄' : ''}</span></div>
+    <div class="col"><button class="btn" type="button" data-go="im-begin">노량진 입성 ▶</button><button class="btn sub" type="button" data-go="im-step" data-v="3">◀ 나와 내 방</button></div>`);
 }
 function imOnGo(go, E, btn) {
   const v = btn && btn.dataset ? btn.dataset.v : null, P = imPick;
+  const inp = typeof document !== 'undefined' ? document.getElementById('imName') : null;
+  if (inp) P.name = imCleanName(inp.value); // 카드를 다시 그리기 전에 입력한 이름 보관
   if (go === 'im-lv') { P.lv = v; imPickCard(E); return true; }
   if (go === 'im-step') { P.step = +v; imPickCard(E); return true; }
   if (go === 'im-trk') { P.track = v; imPickCard(E); return true; }
   if (go === 'im-sex') { P.gender = v; imPickCard(E); return true; }
   if (go === 'im-room') { P.room = v; imPickCard(E); return true; }
+  if (go === 'im-start') { P.startMi = +v || 0; imPickCard(E); return true; }
   if (go === 'im-begin') { imBegin(E); return true; }
   if (go === 'im-again') { imNewYear(E); return true; }
   if (go === 'im-close') { E.hideOverlay(); E.G.mode = 'world'; const f = imCardClose; imCardClose = null; if (f) f(); E.runPending(); return true; }
@@ -5428,11 +5763,35 @@ function imOnGo(go, E, btn) {
 function imBegin(E, o) {
   const P = Object.assign({}, imPick, o || {}), S = E.G.S;
   S.track = P.track || (imTracks()[0] || {}).id; S.gender = P.gender; S.room = P.room;
+  S.name = imCleanName(P.name);
+  S.examNo = String(1000 + Math.floor(Math.random() * 9000));
   imSetupTrack(E, S);
+  imApplyStart(E, S, P.startMi || 0);
   imSchedCache.key = '';
   E.buildMap();
-  E.G.dayIdx = 0; E.G.D = null;
+  E.G.dayIdx = S.startMi; E.G.D = null;
   E.briefCard();
+}
+// 늦게 입성: 그 달부터 · 학교/본가에서 해 온 만큼 실력 · 통장 · 컨디션 · 이미 지난 사건(TO 사전예고 · 원서) 반영
+function imApplyStart(E, S, mi) {
+  const o = imStartOf(mi), t = imTrackById(S.track);
+  S.startMi = E.clamp(mi | 0, 0, IM_MI.EXAM1); S.mi = S.startMi;
+  S.money = o.money; S.hp = o.hp; S.mental = o.mental; S.burnout = o.burnout;
+  if (o.lv) {
+    const late = S.startMi >= IM_MI.TO, r = () => Math.round((Math.random() * 4 - 2) * 10) / 10;
+    imSkillDefs(t).forEach((d) => {
+      const k = d.key;
+      if (k === 's2') S.sk[k] = 8 + (late ? 3 : 2);
+      else if (k === 'en') S.sk[k] = 10;
+      else if (k === 'prac') S.sk[k] = Math.round(22 + (o.lv - 18) * 0.5 - (late ? 4 : 2));
+      else if (k === 'edu') S.sk[k] = o.lv + 2 + r();
+      else if (k === 'ped') S.sk[k] = o.lv - (late ? 8 : 5) + r(); // 교과교육: 혼자 공부로는 덜 다듬어짐
+      else S.sk[k] = o.lv + r();
+    });
+    Object.keys(S.mates).forEach((k) => { S.mates[k] = 30; }); // 스터디원과는 아직 서먹
+  }
+  if (S.startMi > IM_MI.TO) { S.to = Math.max(1, Math.round(S.toBase * (0.7 + Math.random() * 0.55))); S.cut = imCutFor(E); } // 사전예고는 본가에서 봤다
+  if (S.startMi >= IM_MI.EXAM1) S.applied = true; // 원서는 고향에서 미리 냈다
 }
 
 /* ---------- 17. 지도 위 그리기: 가방 멘 수험생 ---------- */
@@ -5476,7 +5835,7 @@ function imBotChoice(E) {
   o.opts.forEach((p, i) => { const v = p.bot != null ? p.bot : 0; if (v > bv) { bv = v; best = i; } });
   return best;
 }
-window.__im = Object.assign(window.__im || {}, { pick: (i) => imChoicePick(window.IMGO, i), botChoice: () => imBotChoice(window.IMGO), plan: () => imBotPlan(window.IMGO), bot: imBot, begin: (o) => imBegin(window.IMGO, o), tracks: () => imTracks().map((t) => t.id), predict: () => imPredict1(window.IMGO, 0.85), event: (id) => imRunEvent(window.IMGO, id) });
+window.__im = Object.assign(window.__im || {}, { pick: (i) => imChoicePick(window.IMGO, i), botChoice: () => imBotChoice(window.IMGO), plan: () => imBotPlan(window.IMGO), bot: imBot, begin: (o) => imBegin(window.IMGO, o), setStart: (mi) => { imPick.startMi = mi; }, starts: () => IM_STARTS.map((x) => x.mi), quizTime: () => imQuizTime(window.IMGO), noteWrong: () => (window.IMGO.G.S.wrongQ || []).slice(), tracks: () => imTracks().map((t) => t.id), predict: () => imPredict1(window.IMGO, 0.85), event: (id) => imRunEvent(window.IMGO, id) });
 Object.defineProperty(window.__im, 'choice', { get: () => imChoiceCur, configurable: true });
 
 /* ---------- 19. 콘텐츠 객체 ---------- */
@@ -5504,8 +5863,8 @@ window.IMGO_GAME = {
     ],
     wander: imHas('IM_MAP_WANDER') ? IM_MAP_WANDER : { count: 9, tiles: '_.', greet: ['합격하자!', '오늘 몇 시간 했어요?', '컵밥 먹으러 가요?', '모의고사 망했어…', '기출 3회독 했어요?', '화이팅!', '단권화 끝났어요?', '…졸려'], bodies: ['#3F4A6B', '#5A6B7F', '#2F3A6B', '#6B5A4A', '#3A5A4A'], shirts: ['#F2EEE4'] },
     worldMusic: 'world', worldBpm: 88,
-    hint: '화면을 끌어서 이동 · A 조사 · ⚡ 뛰기', mapLegend: '노랑 = 나 · 깃발 = 목적지 · 회색 점 = 사람',
-    how: [['이동', '화면을 끌어서 · <strong>A</strong> 조사 · <strong>⚡</strong> 뛰기'], ['공부', '미니게임은 <strong>← ↑ →</strong>'], ['지도', '오른쪽 위 지도 = 전체 지도 (M)']],
+    hint: '탭하면 그곳으로 · 끌어서 이동 · A 조사 · ⚡ 뛰기', mapLegend: '노랑 = 나 · 깃발 = 목적지 · 회색 점 = 사람',
+    how: [['이동', '탭 = 그곳으로 · 끌기 = 이동 · <strong>A</strong> 조사 · <strong>⚡</strong> 뛰기'], ['공부', '미니게임은 <strong>← ↑ →</strong>'], ['지도', '오른쪽 위 지도 = 전체 지도 (M)']],
   },
   initState: () => imInitState(),
   tiles: imHas('IM_TILES') ? IM_TILES : {},
@@ -5520,12 +5879,12 @@ window.IMGO_GAME = {
   sideNext: imSideNext,
   sideStatus: imSideStatus,
   logHTML: imLogHTML,
-  logTitle: (E) => `${imTrackOf(E).name} · ${imNth(E.G.S)}`,
+  logTitle: (E) => `${E.G.S.name ? E.G.S.name + ' · ' : ''}${imTrackOf(E).name} · ${imNth(E.G.S)}`,
   titleHTML: imTitleHTML,
   briefHTML: imBriefHTML,
-  onNewRun(E) { imPick = { step: 1, lv: imPick.lv || '중등', track: imPick.track, gender: imPick.gender || 'f', room: imPick.room || 'nowin' }; imPickCard(E); },
+  onNewRun(E) { imPick = { step: 1, lv: imPick.lv || '중등', track: imPick.track, gender: imPick.gender || 'f', room: imPick.room || 'nowin', name: imPick.name || '', startMi: imPick.startMi || 0 }; imPickCard(E); },
   onGo: imOnGo,
-  onLoad(save, E) { imSchedCache.key = ''; E.buildMap(); },
+  onLoad(save, E) { const S = E.G.S; S.name = imCleanName(S.name); S.startMi = S.startMi || 0; S.wrongQ = Array.isArray(S.wrongQ) ? S.wrongQ : []; S.examNo = S.examNo || ''; imSchedCache.key = ''; E.buildMap(); },
   onDayStart(d, E, quiet) {
     (imQuestsFor(E, d.mi) || []).forEach((q) => E.addQuest(Object.assign({}, q, { due: q.dueAt ? E.dueAt(0, q.dueAt) : null })));
     imOnDayStart(d, E, quiet);
@@ -5630,6 +5989,7 @@ window.IMGO_GAME = {
     px: 0, py: 0, dir: 'down', walkT: 0, moving: false, dash: null, dashCd: 0, trail: [],
     mini: null, miniQ: [], miniDone: null, dlg: null, pending: [], near: null, panelClick: null,
     pops: [], fx: [], banner: null, toast: null, shake: 0, flash: 0, combo: 0, joy: null, keys: {}, snap: null, ending: false,
+    cam: null, camTarget: null, cine: null, tap: null, tapMark: null,
   };
   const DAYS_ = () => GAME.days || (GAME.days = demoContent().days);
   const DAY = () => DAYS_()[G.dayIdx] || DAYS_()[0] || { label: '', title: '', sched: [] };
@@ -5950,7 +6310,7 @@ window.IMGO_GAME = {
           if (l <= budget) { G.px = tg.x; G.py = tg.y; D.i++; budget -= l; } else { G.px += (dx / l) * budget; G.py += (dy / l) * budget; budget = 0; G.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down'; }
         }
         G.moving = true; G.walkT += dt * 2;
-        if (D.i >= D.path.length) { G.dash = null; toast(`도착! ${D.label ? D.label + ' · ' : ''}A로 조사`, 'ok'); }
+        if (D.i >= D.path.length) { G.dash = null; if (D.tapIt) tapArrive(D.tapIt); else toast(`도착! ${D.label ? D.label + ' · ' : ''}A로 조사`, 'ok'); }
       } else {
         const v = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[G.dir], sp = 450 * dt;
         const nx = G.px + v[0] * sp, ny = G.py + v[1] * sp;
@@ -5966,6 +6326,8 @@ window.IMGO_GAME = {
     if (G.joy && G.joy.on) { const dx = G.joy.x - G.joy.ox, dy = G.joy.y - G.joy.oy, l = Math.hypot(dx, dy); if (l > 8) { vx = dx / Math.max(l, 40); vy = dy / Math.max(l, 40); } }
     const l = Math.hypot(vx, vy);
     G.moving = l > 0.1;
+    if (G.moving) G.tap = null; // 조이스틱·키보드가 탭 이동을 취소
+    else if (G.tap) { tapWalk(dt); return; }
     if (!G.moving) return;
     if (l > 1) { vx /= l; vy /= l; }
     const sp = (CFG.speed || 150) * (stat(CFG.hpKey) < CFG.slowBelow ? 0.7 : 1) * dt;
@@ -6007,10 +6369,74 @@ window.IMGO_GAME = {
     if (G.mode !== 'world' || G.dash) return;
     if (G.dashCd > 0) { toast(`⚡ ${CFG.dashLabel} 재충전 중 · ${Math.ceil(G.dashCd)}초`); return; }
     if (stat(CFG.hpKey) < CFG.dashCost + 4) { toast('체력이 부족해서 못 달려요…', 'bad'); return; }
-    const o = objective();
-    const path = o ? bfsFrom(Math.floor(G.px / TS), Math.floor(G.py / TS), Math.floor(o.x / TS), Math.floor(o.y / TS)) : null;
-    statAdd(CFG.hpKey, -CFG.dashCost); G.dash = { t: 5, path, i: 0, label: o ? o.label : '' }; G.dashCd = CFG.dashCd; G.trail = [];
+    const tp = G.tap, o = tp ? { x: tp.x, y: tp.y, label: tp.it ? tp.it.label : '' } : objective(); // 탭 목적지가 있으면 그쪽으로
+    const path = tp ? tp.path.slice(tp.i) : o ? bfsFrom(Math.floor(G.px / TS), Math.floor(G.py / TS), Math.floor(o.x / TS), Math.floor(o.y / TS)) : null;
+    statAdd(CFG.hpKey, -CFG.dashCost); G.dash = { t: 5, path, i: 0, label: o ? o.label : '', tapIt: tp ? tp.it : null }; G.dashCd = CFG.dashCd; G.trail = []; G.tap = null;
     sfx.up(); pop(VW / 2, VH * 0.42, path ? `⚡ ${CFG.dashLabel}! → ${o.label || '목적지'}` : `⚡ ${CFG.dashLabel}!`, C.chalk, 20);
+  }
+  /* ---------- 탭 이동: 바닥을 탭하면 그곳까지 걷기 · 상호작용 대상을 탭하면 옆까지 걸어가서 자동 조사 ----------
+     G.tap = { path:[{x,y}], i, x, y (목적지 표시), it (대상 | null), t0 } · 조이스틱/키보드 입력이 들어오면 취소 · ⚡는 탭 목적지로 */
+  function tapTarget(wx, wy) {
+    let best = null, bd = 26;
+    const near = (it, x, y) => { const d = Math.hypot(x - wx, y - wy); if (d < bd) { bd = d; best = it; } };
+    for (const it of INTER) {
+      near(it, it.x, it.y);
+      if (it.d) { const c = tileCenter(it.d.tx, it.d.ty); near(it, c.x, c.y); } // 문 칸 자체를 눌러도
+      if (it.f && isSolid(Math.floor(it.f.tx), Math.floor(it.f.ty))) near(it, it.x, it.y - 8);
+    }
+    for (const a of G.actors) near({ kind: 'actor', at: 'actor:' + a.id, a, x: a.x, y: a.y, label: a.label || a.name }, a.x, a.y);
+    return best;
+  }
+  function tapAt(p) {
+    if (G.mode !== 'world' || !G.D || G.dash) return false;
+    const wx = p.x + camX(), wy = p.y + camY(), it = tapTarget(wx, wy);
+    const tx = Math.floor((it ? it.x : wx) / TS), ty = Math.floor((it ? it.y : wy) / TS);
+    if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) return false;
+    const path = bfsFrom(Math.floor(G.px / TS), Math.floor(G.py / TS), tx, ty);
+    if (!path) { pop(p.x, p.y - 10, '갈 수 없어요', C.hot, 14); return false; }
+    if (path.length > 1) path.shift(); // 지금 서 있는 칸 중심은 건너뜀
+    const end = it ? { x: it.x, y: it.y } : isSolid(tx, ty) ? path[path.length - 1] : { x: clamp(wx, tx * TS + 10, tx * TS + TS - 10), y: clamp(wy, ty * TS + 10, ty * TS + TS - 10) };
+    if (!it && !isSolid(tx, ty)) path.push(end);
+    G.tap = { path, i: 0, x: end.x, y: end.y, it, t0: G.simClock };
+    G.tapMark = { x: end.x, y: end.y, t0: G.simClock, it: !!it };
+    sfx.key();
+    return true;
+  }
+  function tapWalk(dt) {
+    const tp = G.tap;
+    let bud = (CFG.speed || 150) * (stat(CFG.hpKey) < CFG.slowBelow ? 0.7 : 1) * dt;
+    const close = () => tp.it && (tp.it.kind === 'npc' || tp.it.kind === 'actor') && Math.hypot(tp.it.x - G.px, tp.it.y - G.py) < 34;
+    while (bud > 0 && tp.i < tp.path.length && !close()) {
+      const q = tp.path[tp.i], dx = q.x - G.px, dy = q.y - G.py, l = Math.hypot(dx, dy);
+      if (l > 0.01) G.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+      if (l <= bud) { G.px = q.x; G.py = q.y; tp.i++; bud -= l; } else { G.px += (dx / l) * bud; G.py += (dy / l) * bud; bud = 0; }
+    }
+    G.moving = true;
+    const prev = Math.floor(G.walkT * 4); G.walkT += dt; if (Math.floor(G.walkT * 4) !== prev) sfx.step();
+    if (tp.i >= tp.path.length || close()) { G.tap = null; G.moving = false; if (tp.it) tapArrive(tp.it); }
+  }
+  function tapArrive(it) {
+    const cur = it.kind === 'actor' ? findNear() : INTER.find((x) => x.at === it.at) || it;
+    if (!cur || Math.hypot(cur.x - G.px, cur.y - G.py) > 64) return;
+    G.near = cur; if (cur.kind === 'door' && cur.d) G.dir = cur.d.ty < cur.d.sy ? 'up' : cur.d.ty > cur.d.sy ? 'down' : G.dir;
+    interact();
+  }
+  function drawTapMark(time) {
+    const mk = G.tapMark; if (!mk) return;
+    const age = G.simClock - mk.t0, live = !!G.tap;
+    if (!live && age > 0.6) { G.tapMark = null; return; }
+    const a = live ? 1 : Math.max(0, 1 - age / 0.6);
+    g.globalAlpha = a;
+    for (let k = 0; k < 2; k++) { const r = 6 + ((time * 1.6 + k * 0.5) % 1) * 16; g.strokeStyle = `rgba(255,213,74,${(1 - ((time * 1.6 + k * 0.5) % 1)) * 0.9})`; g.lineWidth = 2; g.beginPath(); g.ellipse(mk.x, mk.y + 8, r, r * 0.55, 0, 0, 7); g.stroke(); }
+    g.fillStyle = mk.it ? C.act : C.chalk; g.beginPath(); g.ellipse(mk.x, mk.y + 8, 5, 3, 0, 0, 7); g.fill();
+    if (live && G.tap.path.length > G.tap.i) { g.fillStyle = 'rgba(255,213,74,.6)'; for (let i = G.tap.i; i < G.tap.path.length - 1; i++) { const q = G.tap.path[i]; g.beginPath(); g.arc(q.x, q.y + 8, 2.8, 0, 7); g.fill(); } }
+    if (live) { // 목적지 핀 (대상이면 초록)
+      const bob = Math.sin(time * 6) * 3, py = mk.y - 22 + bob, col = mk.it ? C.act : C.chalk;
+      g.fillStyle = 'rgba(15,18,36,.5)'; g.beginPath(); g.ellipse(mk.x, mk.y + 8, 7, 3, 0, 0, 7); g.fill();
+      g.fillStyle = col; g.beginPath(); g.arc(mk.x, py, 8, Math.PI, 0); g.lineTo(mk.x, py + 14); g.closePath(); g.fill();
+      g.strokeStyle = '#12152A'; g.lineWidth = 1.5; g.stroke(); g.fillStyle = '#12152A'; g.beginPath(); g.arc(mk.x, py, 3, 0, 7); g.fill();
+    }
+    g.globalAlpha = 1;
   }
   function locName(at) {
     if (!at) return '';
@@ -6100,8 +6526,18 @@ window.IMGO_GAME = {
      9. 지도 그리기 · 미니맵 · 전체 지도
      ===================================================================== */
   const ME = () => Object.assign({}, CFG.player, GAME.me ? GAME.me(E) : {});
-  const camX = () => (MW * TS <= VW ? (MW * TS - VW) / 2 : clamp(G.px - VW / 2, -20, MW * TS - VW + 20));
-  const camY = () => clamp(G.py - VH * 0.52, -90, MH * TS - VH + 60);
+  // 카메라: 평소엔 플레이어 중심. G.camTarget = { x, y, speed? } (월드 px) 이면 그쪽으로 부드럽게 이동 (지도 투어 등), null 이면 플레이어로 돌아옴
+  const camCX = () => (G.cam ? G.cam.x : G.px), camCY = () => (G.cam ? G.cam.y : G.py);
+  const camX = () => (MW * TS <= VW ? (MW * TS - VW) / 2 : clamp(camCX() - VW / 2, -20, MW * TS - VW + 20));
+  const camY = () => clamp(camCY() - VH * 0.52, -90, MH * TS - VH + 60);
+  function updateCam(dt) {
+    const T0 = G.camTarget;
+    if (!T0 && !G.cam) return;
+    if (!G.cam) G.cam = { x: G.px, y: G.py };
+    const tx = T0 ? T0.x : G.px, ty = T0 ? T0.y : G.py, k = 1 - Math.exp(-dt * ((T0 && T0.speed) || 5));
+    G.cam.x += (tx - G.cam.x) * k; G.cam.y += (ty - G.cam.y) * k;
+    if (!T0 && Math.hypot(tx - G.cam.x, ty - G.cam.y) < 3) G.cam = null; // 플레이어에 다시 붙음
+  }
   function drawTile(ch, x, y, time) {
     const t = tileOf(ch), px = x * TS, py = y * TS;
     if (t.wall) { g.fillStyle = t.color || '#2A3358'; g.fillRect(px, py, TS, TS); if (y + 1 < MH && !tileOf(grid[y + 1][x]).wall) { g.fillStyle = t.edge || '#3A467A'; g.fillRect(px, py + TS - 10, TS, 10); } return; }
@@ -6130,6 +6566,7 @@ window.IMGO_GAME = {
     // 방 이름
     g.font = `13px ${FD}`; g.textAlign = 'center';
     for (const r of ROOMS) { g.fillStyle = 'rgba(27,35,64,.55)'; g.fillText(r.t, r.x * TS, r.y * TS); }
+    drawTapMark(time);
     // 돌아다니는 사람들 + 인사
     if (!GAME.wanderVisible || GAME.wanderVisible(E)) for (const w of G.wander) {
       drawPerson(w.x, w.y, w.vy < 0 ? 'up' : 'down', w.uniform ? w.shirt : w.body, w.hair, w.t, { small: true, uniform: w.uniform });
@@ -6142,6 +6579,7 @@ window.IMGO_GAME = {
       if (t) { g.font = `11px ${FD}`; const ww = g.measureText(t).width + 12; g.fillStyle = a.urgent && Math.sin(time * 6) > 0 ? '#FFE0E4' : '#FFFDF4'; rr(a.x - ww / 2, a.y - 46, ww, 17, 6); g.fill(); g.fillStyle = a.urgent ? '#C62828' : '#1B2340'; g.textAlign = 'center'; g.fillText(t, a.x, a.y - 34); }
     }
     if (GAME.drawWorld) GAME.drawWorld(g, E, time);
+    if (G.cine && G.cine.drawWorld) G.cine.drawWorld(g, E, time); // 연출(투어) 강조 링 등 — 월드 좌표
     // 질주 잔상
     const me = ME();
     if (G.dash) G.trail.forEach((p, i) => { g.globalAlpha = (i / G.trail.length) * 0.45; drawPerson(p.x, p.y, G.dir, me.body, me.hair, 0, me); });
@@ -6203,14 +6641,34 @@ window.IMGO_GAME = {
     g.imageSmoothingEnabled = false; g.drawImage(MAPCV, r.x, r.y + 16, r.w, r.w * MH / MW); g.imageSmoothingEnabled = true;
     drawMapMarks(r.x, r.y + 16, sc, time, false);
   }
-  function drawFullMap(time) {
+  // 전체 지도 (M) — foot: 아래 안내 문구 바꾸기 · 반환 { ox, oy, sc } (월드 px → 화면: ox + x/TS*sc)
+  function drawFullMap(time, foot) {
     g.fillStyle = 'rgba(8,10,22,.95)'; g.fillRect(0, 0, VW, VH);
     g.fillStyle = C.chalk; g.font = `20px ${FD}`; g.textAlign = 'center'; g.fillText(`${CFG.mapName} 전체 지도`, VW / 2, 34);
     g.fillStyle = C.ink2; fitText(CFG.mapLegend, VW - 20, 11, FB); g.fillText(CFG.mapLegend, VW / 2, 52);
     const sc = Math.min((VW - 20) / MW, (VH - 130) / MH), ox = (VW - MW * sc) / 2, oy = 66;
     g.imageSmoothingEnabled = false; g.drawImage(MAPCV, ox, oy, MW * sc, MH * sc); g.imageSmoothingEnabled = true;
     drawMapMarks(ox, oy, sc, time, true);
-    g.fillStyle = C.ink2; g.font = `12px ${FB}`; g.fillText('아무 곳이나 누르면 닫혀요 (M)', VW / 2, oy + MH * sc + 24);
+    g.fillStyle = C.ink2; g.font = `12px ${FB}`; g.fillText(foot || '아무 곳이나 누르면 닫혀요 (M)', VW / 2, oy + MH * sc + 24);
+    return { ox, oy, sc };
+  }
+  /* ---------- 연출 모드 (G.mode = 'cine'): 지도 투어 같은 카메라 연출. 시계·이동·A/⚡ 멈춤 ----------
+     cine({ update(dt, E), drawWorld?(g, E, t) 월드 좌표, draw?(g, E, t) 화면 좌표, tap?(p, E), key?(k, E), enter?(E), exit?(E), onEnd?(E) })
+     G.cine.t = 시작 후 초. 끝낼 때 endCine() → 카메라는 플레이어로 돌아가고 G.mode = 'world' */
+  function cine(o) {
+    if (!G.D) return false;
+    G.cine = Object.assign({ t: 0 }, o); G.mode = 'cine'; G.joy = null; G.tap = null; G.dash = null; G.keys = {};
+    $('aBtn').hidden = true; $('dBtn').hidden = true; setPad(null);
+    if (G.cine.enter) G.cine.enter(E);
+    return true;
+  }
+  function endCine() {
+    const o = G.cine; if (!o) return;
+    G.cine = null; G.camTarget = null;
+    if (G.mode === 'cine') G.mode = 'world';
+    if (o.exit) o.exit(E);
+    if (o.onEnd) o.onEnd(E);
+    runPending();
   }
 
   /* =====================================================================
@@ -6219,7 +6677,7 @@ window.IMGO_GAME = {
        st = 시작 후 초, b = 박(beat), now = clockNow()   ·   m.t0 = 시작 시각 (박 b 의 시각 = t0 + b*60/bpm)
      runMinis([m1, m2, …], onDone) → 차례로 실행 후 지도로 복귀 → onDone() → G.pending 처리
      ===================================================================== */
-  function runMinis(list, onDone) { G.miniQ = list.filter(Boolean).slice(); G.miniDone = onDone; G.mode = 'mini'; $('aBtn').hidden = true; G.joy = null; nextMini(); }
+  function runMinis(list, onDone) { G.miniQ = list.filter(Boolean).slice(); G.miniDone = onDone; G.mode = 'mini'; $('aBtn').hidden = true; G.joy = null; G.tap = null; nextMini(); }
   function nextMini() {
     if (G.mini && G.mini.exit) G.mini.exit();
     const m = G.miniQ.shift();
@@ -6475,7 +6933,7 @@ window.IMGO_GAME = {
       },
       timeout() {
         sfx.bad(); hurt(def.hurt ?? 2);
-        if (quiz) { this.results[this.i] = 'timeout'; this.wrongs++; this.why = '시간 초과!' + (steps[this.i].why ? ' ' + steps[this.i].why : ''); this.reveal = true; this.render(); this.lock = clockNow() + 1.1; }
+        if (quiz) { this.results[this.i] = 'timeout'; this.wrongs++; this.why = '시간 초과!' + (steps[this.i].why ? ' ' + steps[this.i].why : ''); this.reveal = true; this.render(); this.lock = clockNow() + (def.revealT ?? 1.1); }
         else { this.why = '시간 초과! 다시'; this.stepT0 = clockNow(); this.render(); }
       },
       correctEl() {
@@ -6525,7 +6983,7 @@ window.IMGO_GAME = {
         sfx.bad(); hurt(def.hurt ?? 2); this.idleSince = clockNow();
         if (el) { el.classList.remove('bad'); void el.offsetWidth; el.classList.add('bad'); }
         const s = steps[this.i];
-        if (quiz) { this.results[this.i] = 'wrong'; this.wrongs++; this.why = why || s.why || `정답: ${s.ans ?? s.digits ?? (s.order ? s.order.join(' → ') : '')}`; this.reveal = true; this.render(); const b2 = $('panel').querySelector(`[data-opt="${CSS.escape(String(el && el.dataset.opt || ''))}"]`); if (b2) b2.classList.add('bad'); this.lock = clockNow() + 1.1; return; }
+        if (quiz) { this.results[this.i] = 'wrong'; this.wrongs++; this.why = why || s.why || `정답: ${s.ans ?? s.digits ?? (s.order ? s.order.join(' → ') : '')}`; this.reveal = true; this.render(); const b2 = $('panel').querySelector(`[data-opt="${CSS.escape(String(el && el.dataset.opt || ''))}"]`); if (b2) b2.classList.add('bad'); this.lock = clockNow() + (def.revealT ?? 1.1); return; }
         if (why) { this.why = why; this.render(); }
       },
       next() {
@@ -7180,7 +7638,7 @@ window.IMGO_GAME = {
   function hideOverlay() { $('ov').hidden = true; }
   const canContinue = () => !!(save && save.v === 1 && DAYS_()[save.idx]);
   function titleCard() {
-    G.mode = 'title'; G.D = null; G.paused = false; musicStop(); setPad(null); hidePanel(); $('aBtn').hidden = true; $('dBtn').hidden = true; $('dlg').hidden = true; G.dlg = null;
+    G.mode = 'title'; G.D = null; G.paused = false; G.cine = null; G.camTarget = null; G.cam = null; G.tap = null; musicStop(); setPad(null); hidePanel(); $('aBtn').hidden = true; $('dBtn').hidden = true; $('dlg').hidden = true; G.dlg = null;
     if (GAME.titleHTML) return showCard(GAME.titleHTML(E, { canContinue: canContinue(), best, save }));
     showCard(`<h1 class="logo">${esc(CFG.title)}<small>${esc(CFG.subtitle)}</small></h1>
       <p class="tag">${CFG.tagline || `${DAYS_().length}${esc(CFG.dayUnit)} 캠페인 · 하루 일정을 지키며 버텨요`}</p>
@@ -7216,6 +7674,7 @@ window.IMGO_GAME = {
     G.min = dayStart(); schedSrc = null;
     G.D = { done: {}, fired: {}, log: { slots: 0, late: 0, miss: 0, quests: 0, missed: 0 }, marks: [] };
     G.actors = []; G.pending = []; G.blink.clear(); G.dash = null; G.dashCd = 0; G.trail = []; G.combo = 0; G.ending = false; G.keys = {}; G.joy = null;
+    G.tap = null; G.tapMark = null; G.cam = null; G.camTarget = null; G.cine = null;
     const sp = d.spawn || CFG.spawn, c = tileCenter(sp[0], sp[1]); G.px = c.x; G.py = c.y; G.dir = d.spawnDir || CFG.spawnDir;
     G.quests = G.quests.filter((q) => !q.done || q.doneAt == null || Math.floor(q.doneAt / 1440) >= idx - 1);
     (d.quests || []).forEach((q) => addQuest(Object.assign({}, q, { due: q.due ?? (q.dueAt ? dueAt(q.dueDay || 0, q.dueAt) : null) })));
@@ -7228,7 +7687,7 @@ window.IMGO_GAME = {
   // 하루 끝: GAME.beforeDayEnd(forced, E) → [미니…] (예: 귀갓길) → GAME.onDayEnd → dayCard
   function endDay(forced) {
     if (G.ending || G.mode === 'card' || !G.D) return;
-    G.ending = true; hidePanel(); $('aBtn').hidden = true; $('dBtn').hidden = true; G.dash = null; G.joy = null;
+    G.ending = true; hidePanel(); $('aBtn').hidden = true; $('dBtn').hidden = true; G.dash = null; G.joy = null; G.tap = null; if (G.cine) { G.cine = null; G.camTarget = null; }
     if (G.dlg) { G.dlg = null; $('dlg').hidden = true; }
     for (const s of daySched()) if (s.loc && s.must !== false && !G.D.done[s.id]) markSlot(s.id, 'miss');
     const minis = GAME.beforeDayEnd ? GAME.beforeDayEnd(forced, E) || [] : [];
@@ -7302,7 +7761,9 @@ window.IMGO_GAME = {
     if (G.toast) { G.toast.t += dt; if (G.toast.t > 3) G.toast = null; }
     G.flash = Math.max(0, G.flash - dt); G.shake = Math.max(0, G.shake - dt);
     G.dashCd = Math.max(0, (G.dashCd || 0) - dt);
-    if (G.mode === 'world' && G.D) {
+    if (G.D) updateCam(dt);
+    if (G.mode === 'cine' && G.cine) { G.cine.t += dt; if (G.cine.update) G.cine.update(dt, E); }
+    else if (G.mode === 'world' && G.D) {
       moveWorld(dt); moveActors(dt);
       const W = CFG.wander || {};
       for (const w of G.wander) {
@@ -7330,6 +7791,7 @@ window.IMGO_GAME = {
     else if (!G.D) drawScene(GAME.titleScene || 'office', null, t * 1.5, t);
     else drawWorld(t);
     if (G.D && G.mode !== 'title' && G.mode !== 'map' && !(G.mini && G.mini.noHUD)) drawHUD();
+    if (G.mode === 'cine' && G.cine && G.cine.draw) G.cine.draw(g, E, t);
     if (G.mode === 'map') drawFullMap(t);
     drawFX();
   }
@@ -7348,21 +7810,29 @@ window.IMGO_GAME = {
     audioInit();
     const p = toV(e);
     if (G.mode === 'map') { G.mode = 'world'; return; }
+    if (G.mode === 'cine') { if (G.cine && G.cine.tap) G.cine.tap(p, E); return; }
     if (G.mode === 'world' && inMinimap(p)) { G.mode = 'map'; G.joy = null; return; }
-    if (G.mode === 'world') { G.joy = { on: true, ox: p.x, oy: p.y, x: p.x, y: p.y, id: e.pointerId }; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* 무시 */ } return; }
+    // 누르는 순간엔 조이스틱 — 10px 넘게 끌면 조이스틱, 짧게(0.35초 안) 떼면 탭 이동
+    if (G.mode === 'world') { G.joy = { on: true, ox: p.x, oy: p.y, x: p.x, y: p.y, id: e.pointerId, t0: performance.now(), moved: false }; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* 무시 */ } return; }
     if (G.mode === 'dlg') { advDlg(); return; }
     sw = { x: e.clientX, y: e.clientY, done: false };
   });
   cv.addEventListener('pointermove', (e) => {
-    if (G.joy && G.joy.on && e.pointerId === G.joy.id) { const p = toV(e); G.joy.x = p.x; G.joy.y = p.y; return; }
+    if (G.joy && G.joy.on && e.pointerId === G.joy.id) { const p = toV(e); G.joy.x = p.x; G.joy.y = p.y; if (Math.hypot(p.x - G.joy.ox, p.y - G.joy.oy) > 10) G.joy.moved = true; return; }
     if (!sw || sw.done) return;
     const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
     if (Math.hypot(dx, dy) > 34) { sw.done = true; if (Math.abs(dx) > Math.abs(dy)) act(dx < 0 ? 'left' : 'right'); else if (dy < 0) act('up'); }
   });
-  const endPtr = (e) => { if (G.joy && e.pointerId === G.joy.id) G.joy = null; sw = null; };
+  const endPtr = (e) => {
+    const j = G.joy;
+    if (j && e.pointerId === j.id) { G.joy = null; if (e.type === 'pointerup' && !j.moved && performance.now() - j.t0 < 350 && j.oy > hudBottom) tapAt({ x: j.ox, y: j.oy }); }
+    sw = null;
+  };
   cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', endPtr);
   window.addEventListener('keydown', (e) => {
     const k = e.key;
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; // 이름 입력 등은 그대로
+    if (G.mode === 'cine') { if (G.cine && G.cine.key) G.cine.key(k, E); return; }
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k)) e.preventDefault();
     if (G.mode === 'map') { G.mode = 'world'; return; }
     if (G.mode === 'world') {
@@ -7421,6 +7891,7 @@ window.IMGO_GAME = {
     // 흐름
     say, advDlg, whenFree, runPending, startDay, endDay, briefCard, titleCard, finalCard, failCard, showCard, hideOverlay, saveRun, resetRun, setPause,
     // 지도
+    cine, endCine, drawFullMap, tapAt, cam: () => ({ x: camX(), y: camY() }),
     buildMap, rebuildMinimap, isSolid, tileCenter, posOf, locName, objective, defaultObjective, findNear, interact, bfsFrom, dash, addActor, removeActor, interactables, refreshInteractables() { INTER = interactables(); },
     // 일정 · 퀘스트
     daySched, curSlot, nextSlot, markSlot, slotOpen, enterSlot, defaultSlotEnter, addQuest, completeQuest, pendingQuests, dueAt, nowAbs, dueText,
@@ -7469,7 +7940,7 @@ window.IMGO_GAME = {
   }
   window.__game = {
     G, E, update, draw, act, interact, objective, isSolid, clockNow, tileCenter, advDlg, findNear, dash, runMinis, startDay, endDay, posOf, daySched, pendingQuests, completeQuest, addQuest,
-    renderQuest, renderSide, demo, DEMOS, DOORS, FURN, NPCS, get MW() { return MW; }, get MH() { return MH; }, TS,
+    renderQuest, renderSide, demo, DEMOS, DOORS, FURN, NPCS, tapAt, cine, endCine, get MW() { return MW; }, get MH() { return MH; }, TS,
   };
   window.IMGO = E;
 
