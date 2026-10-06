@@ -3017,6 +3017,7 @@ const IM_MAP_LIB = (() => {
     { key: 'coinnore', at: 'coinnore', label: '코인노래방', short: '코노', icon: '🎤', scene: 'street' },
     { key: 'busstop', at: 'busstop', label: '버스 정류장 · 학원 셔틀', short: '정류장', icon: '🚌', scene: 'busstop' },
     { key: 'lab', at: 'door:lab', label: 'AI전자과 실습실', short: '실습실', icon: '🔧', scene: 'workshop' },
+    { key: 'principal', at: 'door:principal', label: '교장실', short: '교장실', icon: '🏛️', scene: 'principal' },
   ];
   // SPEC 장소 키 → posOf 키 (core 의 IM_LOC 와 별개 · 충돌 없음)
   const LOC = { room: 'door:room', exit: 'exit', living: 'living', classroom: 'door:class', class: 'door:class', staff: 'door:staff', staffroom: 'door:staff', homeroom: 'homeroom', library: 'door:library', cafeteria: 'cafeteria', kiosk: 'kiosk', field: 'field', academy: 'door:academy', jaejong: 'door:jaejong', studycafe: 'door:studycafe', store: 'store', coinnore: 'coinnore', busstop: 'busstop', gate: 'gate', school: 'gate', exam: 'busstop', lab: 'door:lab', ebs: 'door:library' };
@@ -3124,7 +3125,7 @@ const IM_MAP_LIB = (() => {
     if (voc) M.door('class', 21, 4, 21, 5, { label: `${grade}학년 AI전자과`, plate: 'AI전자', color: '#6EC1FF', text: '칠판 구석에 「의무검정 D-?」와 오늘의 실습 과제.' });
     else M.door('class', 21, 4, 21, 5, { label: `${grade}학년 2반 교실`, plate: `${grade}-2`, color: '#6EC1FF', text: '칠판 구석에 누가 「수능 D-?」를 지우고 다시 썼다.' });
     M.door('staff', 28, 4, 28, 5, { label: '교무실', plate: '교무실', color: '#4FD69C', text: '노크 두 번. 커피 냄새와 프린터 소리.' });
-    if (voc) { M.door('library', 35, 4, 35, 5, { label: 'EBS 자기주도학습실', plate: 'EBS', color: '#B48CFF', text: '「EBS 자기주도학습실 · 평일 ~21:00」 — 출석 태그를 찍는다.' }); M.door('lab', 24, 4, 24, 5, { label: 'AI전자과 실습실', plate: '실습실', color: '#FFB347', text: '인두 받침대 열두 개, 오실로스코프 여섯 대. 납 냄새.' }); kind(24, 25, 4, 'lab'); }
+    if (voc) { M.door('library', 35, 4, 35, 5, { label: 'EBS 자기주도학습실', plate: 'EBS', color: '#B48CFF', text: '「EBS 자기주도학습실 · 평일 ~21:00」 — 출석 태그를 찍는다.' }); M.door('lab', 24, 4, 24, 5, { label: 'AI전자과 실습실', plate: '실습실', color: '#FFB347', text: '인두 받침대 열두 개, 오실로스코프 여섯 대. 납 냄새.' }); kind(24, 25, 4, 'lab'); M.door('principal', 31, 4, 31, 5, { label: '교장실', plate: '교장실', color: '#C9A040', text: '「교장실」 명패 · 문 옆에 교훈 액자 「성실 · 창의 · 기술」' }); kind(31, 31, 4, 'staff'); }
     else M.door('library', 35, 4, 35, 5, { label: '도서관 · 야자실', plate: '도서관', color: '#B48CFF', text: '「정숙」 — 형광펜 뚜껑도 살살.' });
     M.door('academy', 11, 32, 11, 33, { label: '다올학원 강의실', plate: '다올학원', color: '#FF8A7A', text: '데스크 옆 출석 체크기에 카드를 찍는다.' });
     M.door('studycafe', 21, 32, 21, 33, { label: '스터디카페 집중공간', plate: '스카', color: '#FFD54A', text: '키오스크 화면: 「좌석을 선택하세요」' });
@@ -3995,7 +3996,58 @@ const IM_SCENES = (() => {
     txt(g, vac ? '방학 등교 자습 · 09:00~18:00' : mn < 21 * 60 && mn >= 17 * 60 ? `평일 ~21:00 · 소등까지 ${Math.floor(left / 60)}시간 ${left % 60}분` : '평일 방과 후 ~21:00 · 출석 태그 ✓', W / 2, 146, 10.5, '#B9F0D5', FB);
   }
 
-  const S = { bedroom, classroom, staffroom, library, academy, jaejong, studycafe, cafeteria, inkang, exam, interview, result, ceremony, street, field, busstop, workshop, ebsroom };
+  /* ---------- 직업계고 · 교장실 (학교장 추천 면담) ---------- */
+  function principal(m, b, now, E) {
+    const { g, W, H, t, FD, FB } = env(E), st = stage(E, 96);
+    vgrad(g, 0, 0, W, H, ['#E9DFC9', '#D8C9AA']);
+    for (let x = 0; x < W; x += 26) box(g, 'rgba(120,80,40,.07)', x, 0, 2, H); // 나무 벽 판넬
+    // 교훈 액자 · 태극기 · 감사패 진열장
+    box(g, '#7A5230', W / 2 - 82, 94, 164, 40, 3); box(g, '#FFFDF4', W / 2 - 77, 98, 154, 32, 2); txt(g, '교훈 · 성실 · 창의 · 기술', W / 2, 119, 13, '#7A1C2C', FD);
+    const fx = 22, fy = 102; box(g, '#8A6A4A', fx - 2, fy - 2, 50, 34, 2); box(g, '#FFFFFF', fx, fy, 46, 30); circ(g, '#C62828', fx + 23, fy + 15, 7); g.fillStyle = '#1F4E9C'; g.beginPath(); g.arc(fx + 23, fy + 15, 7, 0, Math.PI); g.fill();
+    g.fillStyle = '#1B2340'; [[5, 5], [37, 5], [5, 22], [37, 22]].forEach(([dx, dy]) => g.fillRect(fx + dx, fy + dy, 5, 3));
+    const cx = W - 78; box(g, '#6B4A2A', cx, 98, 62, 62, 3); box(g, 'rgba(200,230,255,.35)', cx + 4, 102, 54, 54, 2);
+    [[cx + 10, 128, '#E8C04A'], [cx + 28, 124, '#C9CED8'], [cx + 44, 130, '#E8A04A']].forEach(([x, y, c]) => { box(g, c, x, y, 10, 22, 2); circ(g, c, x + 5, y - 3, 6); });
+    box(g, '#6B4A2A', cx + 4, 140, 54, 3); txt(g, '전국 기능경기대회', cx + 31, 154, 7, '#FFE38A', FB);
+    lower(g, st, (vw, LH, ext) => {
+      const ty = -210;
+      // 창 (오후 햇살)
+      const wx = 14, wy = -LH + 6, wh = Math.min(120, LH - 300); if (wh > 40) { box(g, '#FFFDF4', wx - 3, wy - 3, 76, wh + 6, 2); windowView(g, E, wx, wy, 70, wh, t, { branch: true }); box(g, '#FFFDF4', wx + 34, wy, 2, wh); }
+      clock(g, vw - 34, -LH + 30, 18, gmin(E));
+      glow(g, vw * 0.5, ty - 60, 140, 'rgba(255,240,200,.35)');
+      // 교장 선생님 + 큰 책상 + 명패
+      E.drawFront(vw * 0.5, ty - 4, 0.7, { body: '#3A3A48', hair: '#C9CED8', glasses: true, mood: 'calm', pose: P(m, 'talk') ? 'talk' : 'idle', bob: Math.abs(Math.sin((b || 0) * Math.PI)) * 1.5 });
+      box(g, '#5A3A1E', 10, ty, vw - 20, 16, 4); vgrad(g, 14, ty + 16, vw - 28, 64, ['#6B4A2A', '#4A3018']);
+      plate(g, vw * 0.5, ty - 22, 92, '교장 윤태호', FD, '#2B2233', '#FFE38A');
+      box(g, '#FFFDF4', vw * 0.2, ty - 10, 46, 8, 1); txt(g, '학생부', vw * 0.2 + 23, ty - 13, 8, '#5A6283', FD);
+      box(g, '#C62828', vw * 0.76, ty - 14, 14, 12, 3); box(g, '#7A1C2C', vw * 0.76 + 3, ty - 20, 8, 7, 2); // 직인
+      box(g, '#FFFFFF', vw * 0.66, ty - 18, 12, 14, 3); steam(g, vw * 0.66 + 6, ty - 22, t, 1, 10, 0.4); // 녹차
+      // 손님 소파 · 화분
+      box(g, '#8A2E3A', vw * 0.12, ty + 110, vw * 0.76, 30, 8); box(g, '#A33A48', vw * 0.12, ty + 92, vw * 0.76, 22, 8);
+      box(g, '#B5432F', vw - 46, ty + 60, 26, 26, 3); circ(g, '#3F8F6A', vw - 33, ty + 48, 16); circ(g, '#4FA35A', vw - 42, ty + 38, 9);
+      if (P(m, 'me') !== false) meBack(E, vw / 2, ty + 210, 1.05);
+    });
+  }
+  /* ---------- 직업계고 · 담임 방과후 자격증 지도 (화이트보드 + 담임 쌤 + 간식) ---------- */
+  function coach(m, b, now, E) {
+    const { g, W, H, t, FD, FB } = env(E), st = stage(E, 128);
+    vgrad(g, 0, 0, W, H, ['#E3E8EF', '#CCD5E2']);
+    const bx = 14, by = 96, bw = W - 28, bh = 120;
+    box(g, '#9AA6BC', bx - 4, by - 4, bw + 8, bh + 8, 4); box(g, '#FFFFFF', bx, by, bw, bh);
+    boardText(g, `${P(m, 'icon') || '📌'} ${P(m, 'board') || '자격증 지도'}`, bx + 10, by + 24, bw - 20, 16, '#2B6BD8', FD);
+    (P(m, 'lines') || []).slice(0, 3).forEach((l, i) => boardText(g, l, bx + 10, by + 50 + i * 22, bw - 20, 11.5, ['#1B2340', '#C62828', '#2E8F68'][i % 3], FB));
+    box(g, '#FFD54A', bx + bw - 60, by + bh - 22, 54, 16, 3); txt(g, '15:50~17:30', bx + bw - 33, by + bh - 10, 8.5, '#5A3A00', FB);
+    lower(g, st, (vw, LH, ext) => {
+      const ty = -150;
+      clock(g, 26, -LH + 24, 15, gmin(E));
+      E.drawFront(vw * 0.62, ty - 6, 0.68, { body: '#6B4A8A', hair: '#2B2233', long: true, glasses: false, mood: 'calm', pose: Math.floor((b || 0) / 4) % 2 ? 'point' : 'talk', bob: Math.abs(Math.sin((b || 0) * Math.PI)) * 2 });
+      box(g, '#8A6A4A', 0, ty, vw, 14, 3); vgrad(g, 0, ty + 14, vw, ext - ty, ['#A9825A', '#8A6A42']);
+      if (P(m, 'snack')) { box(g, '#FFE38A', vw * 0.18, ty - 26, 14, 24, 4); box(g, '#FFFFFF', vw * 0.18 + 3, ty - 30, 8, 6, 2); box(g, '#FFE38A', vw * 0.18 + 18, ty - 26, 14, 24, 4); box(g, '#FFFFFF', vw * 0.18 + 21, ty - 30, 8, 6, 2); txt(g, '🍌', vw * 0.18 + 16, ty - 34, 12, '#1B2340', FD); }
+      box(g, '#FFFDF4', vw * 0.36, ty - 10, 50, 8, 1); txt(g, P(m, 'place') === '실습실' ? '회로도' : '기출 노트', vw * 0.36 + 25, ty - 13, 8, '#5A6283', FD);
+      if (P(m, 'me') !== false) meBack(E, vw * 0.4, ty + 128, 1.0);
+      if (P(m, 'me') !== false) E.drawStudent(vw * 0.78, ty + 120, 0.8, { hair: '#1A1A1A', body: '#3F5A8A' });
+    });
+  }
+  const S = { bedroom, classroom, staffroom, library, academy, jaejong, studycafe, cafeteria, inkang, exam, interview, result, ceremony, street, field, busstop, workshop, ebsroom, principal, coach };
   // 원본(노량진) 장면 키 별칭 — 포크한 미니가 옛 키를 써도 그려지도록
   Object.assign(S, { gosiwon: bedroom, lecture: classroom, reading: library, studyroom: studycafe, cupbap: street, diner: cafeteria, park: field, station: busstop, practice: classroom, print: studycafe });
   return S;
@@ -5261,8 +5313,8 @@ function imInterviewMini(E, opts = {}) {
   const panel = [{ body: '#3A4A6B', hair: '#9AA0AA', glasses: true }, { body: '#6B3A4A', hair: '#2B2233', long: true, glasses: false }, { body: '#3A5A4A', hair: '#1A1A1A', glasses: true }];
   const univ = opts.univ ? `${opts.univ}${opts.dept ? ' ' + opts.dept : ''}` : '';
   const m = imMnChoiceMini(E, {
-    fin, title: en ? 'English Interview' : '학종 면접', banner: en ? 'English Interview' : '학종 면접', bannerSub: en ? 'Prep 10s → 3 questions · 8s each' : `대기실 10초 → 3문항 · 문항당 8초${univ ? ' · ' + univ : ''}`, bg: 'interview', style: 'tense', bpm: 92, items, reveal: true, endHold: 3, noFail: true,
-    scene: { board: en ? 'Interview Room' : '면접실', sub: '학생부종합', cast: panel }, tipLabel: '키워드: ',
+    fin, title: opts.title || (en ? 'English Interview' : '학종 면접'), banner: opts.title || (en ? 'English Interview' : '학종 면접'), bannerSub: en ? 'Prep 10s → 3 questions · 8s each' : `대기실 10초 → 3문항 · 문항당 8초${univ ? ' · ' + univ : ''}`, bg: 'interview', style: 'tense', bpm: 92, items, reveal: true, endHold: 3, noFail: true,
+    scene: { board: opts.board || (en ? 'Interview Room' : '면접실'), sub: opts.sub || '학생부종합', cast: opts.cast || panel }, tipLabel: '키워드: ',
     okText: en ? 'Nice answer!' : '좋은 답변!', badText: en ? 'Hmm…' : '음…',
     intro: {
       dur: 10, skipAfter: 3.5, pad: [null, [en ? '↑ Ready' : '↑ 준비 끝', en ? 'enter room' : '면접실 입실'], null],
@@ -5361,7 +5413,7 @@ function imRefreshMini(E, opts = {}) {
       g.fillStyle = '#DCE2EE'; E.rr(x, y, w, 28, 8); g.fill(); g.fillRect(x, y + 20, w, 8);
       ['#FF5C6C', '#FFD54A', '#4FD69C'].forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(x + 14 + i * 14, y + 14, 4.5, 0, 7); g.fill(); });
       g.fillStyle = '#FFFFFF'; E.rr(x + 60, y + 6, w - 70, 16, 8); g.fill();
-      g.fillStyle = '#6A7393'; g.font = `10px ${E.FB}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, `${univ} 입학처 › 합격자 조회`, w - 90), x + 70, y + 18);
+      g.fillStyle = '#6A7393'; g.font = `10px ${E.FB}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, opts.site ? `${opts.site} › 합격자 조회` : `${univ} 입학처 › 합격자 조회`, w - 90), x + 70, y + 18);
       const cx = VW / 2, cy = y + 28 + (h - 28) / 2;
       if (this.phase === 'queue') {
         g.fillStyle = '#1B2340'; g.font = `16px ${E.FD}`; g.textAlign = 'center'; g.fillText('접속자가 많아 대기 중입니다', cx, cy - 50);
@@ -7122,7 +7174,7 @@ function imQueueMini(E, o = {}) {
       if (this.phase !== 'queue') { if (this.phase === 'in' && now - this.t0 - this.ph0 > 0.8) this.ph0 = now - this.t0 - 2; return; }
       if (d === 'up') { this.refreshes++; this.q = Math.min(Q0 * 1.3, this.q + Q0 * 0.35); this.qMax = Math.max(this.qMax, this.q); E.sfx.bad(); E.shake(0.2); E.pop(E.VW / 2, E.VH * 0.56, '대기 순번이 뒤로 밀렸다…', C.hot, 16); return; }
       this.words++; E.sfx.key();
-      E.pop(E.VW / 2 + (d === 'left' ? -70 : 70), E.VH * 0.56, d === 'left' ? E.rnd(['abundant = 풍부한', 'reluctant = 꺼리는', 'inevitable = 불가피한', 'deadline = 마감']) : E.rnd(['꿀꺽 · 침착하자', '숨 크게 한 번', '손 떨지 마']), C.chalk, 14);
+      E.pop(E.VW / 2 + (d === 'left' ? -70 : 70), E.VH * 0.56, d === 'left' ? E.rnd(['단어장 한 장 ✓', '영단어 하나 외웠다', '형광펜 쓱 —', '단어 하나 더 ✓']) : E.rnd(['꿀꺽 · 침착하자', '숨 크게 한 번', '손 떨지 마']), C.chalk, 14);
     },
     tap(p, now) { this.input(p.x < E.VW / 3 ? 'left' : p.x > E.VW * 2 / 3 ? 'right' : 'up', now); },
     auto() { this._a = (this._a || 0) + 1; if (this.phase === 'queue' && this._a % 3 === 0) this.input(this._a % 2 ? 'left' : 'right', E.clockNow()); else if (this.phase === 'in') this.input('up', E.clockNow()); },
@@ -7867,6 +7919,978 @@ function imLateGraduate(E, done) {
   ], () => { imAlbum(E, '💐', '졸업식 꽃다발과 롤링페이퍼'); E.say([lines[5]], done); });
 }
 
+/* ===== g3-gong.js ===== */
+/* g3-gong.js — 직업계고(voc) 확장 · research.md §9
+   ① 공무원(특성화고 전형) 루트 — S.vocGoal = 'gong'
+      8월 군무원 9급(전기) → 9월 경기도교육청 기술계고 경력경쟁(일반전기 9급) → 11월 국가직 지역인재 9급(전기)
+      각 시험: 1차 필기(과목별 퀴즈) → 1차 발표 → (합격 시) 면접 대비 → 2차 면접 → 최종 발표
+      필수 응시요건(사용자 지정): 기능사 1개 이상 · 한국사능력검정(게임 기준 3급 이상) · 컴퓨터활용능력 2급
+      학교장 추천(7월 · 교장실 면담) — 국가직 지역인재 · 경기도교육청 기술계고 둘 다 필요(research)
+   ② voc 공통 — 아침 조회 스터디플래너 검사(imPlannerMini) · 담임 방과후 자격증 지도(imCoachMini, 15:50~17:30)
+   build.py 순서: data → map → minis → late → gong → core (여기 최상위 코드는 data·minis·late 만 읽는다. core 함수는 실행 시점에 부른다)
+   봇 훅(window.__im.force): gong = all|gun|edu|nat|fail1|fail2 · hanguk = pass|fail · comhwal = pass|fail · chucheon = yes|no
+                            gisa = pass|fail|retry (gong: fail = 7월 재도전도 불합격) · planner = good|rush
+   날짜는 모두 「(예정·가상)」 — 2027~2028 실제 공고 전. 사람·학교 밖 기관 이름은 가상, 공공기관(군무원·경기도교육청·인사혁신처·국사편찬위원회·대한상공회의소)만 실명. */
+
+/* =====================================================================
+   0. 데이터
+   ===================================================================== */
+const IMG_HK_NEED = 3; // 한국사능력검정 — 게임 기준 「3급 이상」 (2027 9급 공채 개편 기준 · 군무원 9급은 실제 4급 이상)
+const IMG_EX = {
+  gun: { id: 'gun', name: '군무원 9급 (전기)', short: '군무원', icon: '🎖️', org: '국방부 · 군무원', site: '국방부 군무원 채용', mi: 9, date: '8/7(토)', res1: '9/3(금)', ivDate: '10/14(목)', fin: '11/5(금)', cut: 62,
+    subs: [['kor', '국어', 'kor'], ['etheory', '전기공학', 'gong'], ['emach', '전기기기', 'gong']], venue: '○○중학교 시험장', room: '제7시험실 · 9급 군무원 공개경쟁채용', min: 75, chu: false,
+    ivVenue: '○○사단 면접장 (가상)', ivBoard: '9급 군무원 면접 · 전기', iv0: { cat: '군무원 · 직무', kw: '기술로 군을 뒤에서', q: '군무원 전기직으로 부대에서 어떤 일을 하게 될까요?', a: '부대 전기 설비를 점검·유지해 장병들이 불편 없이 임무를 하도록 뒤에서 기술로 지원하겠습니다.', w: ['군인처럼 훈련에 나가는 일이라고 알고 있습니다.', '사무실에서 서류만 다루는 일이라 편할 것 같습니다.'] } },
+  edu: { id: 'edu', name: '경기도교육청 기술계고 경력경쟁 (일반전기 9급)', short: '경기도교육청', icon: '🏫', org: '경기도교육청', site: '경기도교육청 지방공무원 채용', mi: 10, date: '9/11(토)', res1: '10/8(금)', ivDate: '11/16(화)', fin: '12/3(금)', cut: 60,
+    subs: [['phy', '물리학개론', 'gong'], ['etheory', '전기이론', 'gong'], ['emach', '전기기기', 'gong']], venue: '○○고등학교 시험장', room: '제3시험실 · 경기도교육청 지방공무원 경력경쟁', min: 60, chu: true,
+    ivVenue: '경기도교육청 면접장 (가상)', ivBoard: '경기도교육청 9급 경력경쟁 면접 · 일반전기', iv0: { cat: '교육청 · 직무', kw: '학생 안전이 먼저', q: '학교 시설 전기 담당이 되면 가장 먼저 챙길 것은?', a: '학생 안전입니다. 정기 점검으로 노후 설비와 누전을 먼저 찾고 교체 계획을 세우겠습니다.', w: ['예산이 남으면 그때 점검하겠습니다.', '고장 신고가 들어올 때까지 기다리겠습니다.'] } },
+  nat: { id: 'nat', name: '국가직 지역인재 9급 (전기)', short: '지역인재', icon: '🇰🇷', org: '인사혁신처', site: '인사혁신처 사이버국가고시센터', mi: 12, date: '11/20(토)', res1: '12/8(수)', ivDate: '12/15(수)', fin: '12/29(수)', cut: 65,
+    subs: [['kor', '국어', 'kor'], ['eng', '영어', 'eng']], venue: '○○중학교 시험장', room: '제11시험실 · 지역인재 9급 수습직원 선발', min: 50, chu: true,
+    ivVenue: '인사혁신처 면접장 (가상)', ivBoard: '지역인재 9급 수습직원 면접', iv0: { cat: '지역인재 · 포부', kw: '현장에서 배우며 성장', q: '고등학교를 졸업하고 바로 공직에 들어오는 장점은 무엇일까요?', a: '실습실에서 익힌 현장 감각으로 일찍 배우고, 수습 기간부터 선배들께 배우며 오래 성장할 수 있다는 점입니다.', w: ['대학 등록금을 아낄 수 있다는 점입니다.', '빨리 정년을 채울 수 있다는 점입니다.'] } },
+};
+const IMG_ORDER = ['gun', 'edu', 'nat'];
+// 공직가치 · 청렴 · 직무 · 갈등 면접 문항 (imInterviewMini questions 형식 { cat, kw, q, a, w[2] })
+const IMG_IV = [
+  { cat: '공직가치', kw: '공정 · 책임 · 봉사', q: '공무원에게 가장 중요한 가치 하나를 고른다면?', a: '국민을 위한 봉사입니다. 맡은 일을 공정하고 책임 있게 끝까지 처리하는 것이라고 생각합니다.', w: ['정년이 보장되는 안정성입니다.', '윗사람 지시를 무조건 따르는 것입니다.'] },
+  { cat: '청렴', kw: '정중히 거절 · 규정대로', q: '민원인이 고맙다며 상품권을 건넨다면?', a: '마음만 감사히 받고 정중히 거절하겠습니다. 다시 놓고 가시면 규정대로 신고·반환하겠습니다.', w: ['작은 금액이면 받아도 괜찮다고 생각합니다.', '팀 회식비로 같이 쓰겠습니다.'] },
+  { cat: '직무 · 안전', kw: '보고 → 차단 → 점검', q: '배전반 점검 중 이상 발열을 발견했다면?', a: '즉시 선임께 보고하고, 안전 절차에 따라 전원을 차단한 뒤 원인을 점검하겠습니다.', w: ['근무 시간이 끝나서 다음 날 보고하겠습니다.', '혼자 바로 커버를 열어 고쳐 보겠습니다.'] },
+  { cat: '조직 · 갈등', kw: '먼저 배우고 근거로 제안', q: '선배와 일하는 방식이 다를 때는?', a: '먼저 선배의 방식을 배우고, 더 나은 방법은 근거를 갖춰 정중히 제안하겠습니다.', w: ['제 방식이 맞으니 그대로 하겠습니다.', '말하지 않고 그냥 따르겠습니다.'] },
+  { cat: '민원 응대', kw: '규정 설명 + 대안 안내', q: '규정상 안 되는 일을 민원인이 억울해하며 요청한다면?', a: '규정을 쉽게 설명하고, 도울 수 있는 다른 제도나 절차를 함께 찾아 안내하겠습니다.', w: ['규정이니 안 된다고만 말씀드리겠습니다.', '딱한 사정이니 이번만 해 드리겠습니다.'] },
+  { cat: '경험', kw: '원인 찾고 다시', q: '실습에서 실패를 해결해 본 경험이 있나요?', a: '회로가 동작하지 않아 도통 시험으로 냉납을 찾고 다시 납땜해 해결했습니다. 그 뒤로 점검 순서를 지킵니다.', w: ['실패한 적이 없습니다.', '친구가 고쳐 줘서 잘 모르겠습니다.'] },
+  { cat: '성장', kw: '일하면서 배우기', q: '입직 후 어떻게 성장하고 싶나요?', a: '현장 경험을 쌓으면서 전기산업기사 같은 상위 자격과 일학습 병행으로 전문성을 키우겠습니다.', w: ['일단 붙고 나서 생각해 보겠습니다.', '최대한 편한 부서로 가고 싶습니다.'] },
+  { cat: '공직가치', kw: '비밀 엄수', q: '업무 중 알게 된 개인정보를 친구가 물어본다면?', a: '업무상 알게 된 정보는 비밀 엄수 의무가 있어 말할 수 없다고 분명히 거절하겠습니다.', w: ['친한 친구라면 조금은 알려 줘도 됩니다.', '이름만 빼고 알려 주겠습니다.'] },
+];
+// 문항 은행 (3지선다 · a + w[2]) — 정답은 교과서 기본 개념으로 두 번 확인
+const IMG_QB = {
+  phy: [ // 물리학개론 (g = 10 m/s²)
+    { q: '정지 상태에서 2 m/s²로 등가속도 운동하면 5초 뒤 속력은?', a: '10 m/s', w: ['7 m/s', '25 m/s'], tip: 'v = v₀ + at = 0 + 2×5', lv: 0 },
+    { q: '질량 4 kg 물체에 알짜힘 12 N이 작용하면 가속도는?', a: '3 m/s²', w: ['48 m/s²', '0.33 m/s²'], tip: 'F = ma → a = F/m', lv: 0 },
+    { q: '운동량의 단위는?', a: 'kg·m/s', w: ['kg·m/s²', 'J/s'], tip: 'p = mv', lv: 0 },
+    { q: '10 N의 힘으로 물체를 힘의 방향으로 3 m 옮긴 일은?', a: '30 J', w: ['3.3 J', '13 J'], tip: 'W = F·s', lv: 0 },
+    { q: '일률 1 W와 같은 것은?', a: '1 J/s', w: ['1 N·m', '1 J·s'], tip: '일률 = 일 ÷ 시간', lv: 0 },
+    { q: '질량 2 kg, 속력 3 m/s인 물체의 운동 에너지는?', a: '9 J', w: ['6 J', '18 J'], tip: 'Eₖ = ½mv² = ½×2×9', lv: 1 },
+    { q: '질량 1 kg 물체를 10 m 높이로 올렸을 때 증가한 중력 퍼텐셜 에너지는?', a: '100 J', w: ['10 J', '1000 J'], tip: 'Eₚ = mgh = 1×10×10', lv: 0 },
+    { q: '정지 상태에서 자유 낙하한 물체의 2초 뒤 속력은?', a: '20 m/s', w: ['10 m/s', '40 m/s'], tip: 'v = gt = 10×2', lv: 0 },
+    { q: '작용 · 반작용 법칙은 뉴턴의 몇 번째 법칙?', a: '제3법칙', w: ['제1법칙', '제2법칙'], tip: '제1 관성 · 제2 가속도 · 제3 작용 반작용', lv: 0 },
+    { q: '알짜힘이 0이면 물체가 운동 상태를 유지한다 — 이 법칙은?', a: '관성 법칙', w: ['가속도 법칙', '만유인력 법칙'], tip: '뉴턴 제1법칙', lv: 0 },
+    { q: '외력이 없을 때 충돌 전후로 항상 보존되는 양은?', a: '운동량', w: ['운동 에너지', '속력'], tip: '운동 에너지는 탄성 충돌일 때만 보존', lv: 1 },
+    { q: '진동수 50 Hz, 파장 2 m인 파동의 속력은?', a: '100 m/s', w: ['25 m/s', '52 m/s'], tip: 'v = fλ', lv: 1 },
+    { q: '공기 중의 소리(음파)는 어떤 파동?', a: '종파', w: ['횡파', '전자기파'], tip: '진동 방향 = 진행 방향', lv: 0 },
+    { q: '빛이 공기에서 물로 들어가면 속력은?', a: '느려진다', w: ['빨라진다', '변하지 않는다'], tip: '굴절률이 큰 매질에서 느려짐', lv: 0 },
+    { q: '전반사가 일어날 수 있는 빛의 진행 방향은?', a: '굴절률 큰 매질 → 작은 매질', w: ['굴절률 작은 매질 → 큰 매질', '굴절률이 같은 매질 사이'], tip: '+ 입사각 > 임계각', lv: 1 },
+    { q: '열역학 제1법칙이 나타내는 것은?', a: '에너지 보존', w: ['엔트로피 증가', '절대 영도 도달 불가'], tip: 'Q = ΔU + W', lv: 1 },
+    { q: '온도가 일정할 때 이상 기체의 부피를 절반으로 줄이면 압력은?', a: '2배', w: ['절반', '4배'], tip: '보일 법칙 PV = 일정', lv: 1 },
+    { q: '등속 원운동하는 물체의 가속도 방향은?', a: '원의 중심 방향', w: ['운동(접선) 방향', '원의 바깥 방향'], tip: '구심 가속도', lv: 1 },
+    { q: '두 점전하 사이 거리를 2배로 하면 전기력은?', a: '1/4배', w: ['1/2배', '2배'], tip: '쿨롱 법칙 F ∝ 1/r²', lv: 1 },
+    { q: '광전 효과가 보여 주는 빛의 성질은?', a: '입자성', w: ['파동성', '편광성'], tip: '광자 1개가 전자 1개를 떼어냄', lv: 2 },
+    { q: '진자의 길이를 4배로 하면 단진자의 주기는?', a: '2배', w: ['4배', '1/2배'], tip: 'T = 2π√(L/g)', lv: 2 },
+    { q: '용수철 상수 100 N/m, 늘어난 길이 0.2 m일 때 탄성 퍼텐셜 에너지는?', a: '2 J', w: ['20 J', '10 J'], tip: '½kx² = ½×100×0.04', lv: 2 },
+    { q: '질량-에너지 등가 관계식은?', a: 'E = mc²', w: ['E = mgh', 'E = ½mv²'], tip: '특수 상대성 이론', lv: 1 },
+    { q: '알파(α) 입자의 정체는?', a: '헬륨 원자핵', w: ['전자', '광자'], tip: '양성자 2 + 중성자 2', lv: 2 },
+  ],
+  etheory: [ // 전기이론 · 전기공학
+    { q: '10 V 전원에 5 Ω 저항을 연결하면 흐르는 전류는?', a: '2 A', w: ['50 A', '0.5 A'], tip: '옴의 법칙 I = V/R', lv: 0 },
+    { q: '2 Ω과 3 Ω을 직렬로 연결한 합성 저항은?', a: '5 Ω', w: ['1.2 Ω', '6 Ω'], tip: '직렬: 더하기', lv: 0 },
+    { q: '6 Ω과 3 Ω을 병렬로 연결한 합성 저항은?', a: '2 Ω', w: ['9 Ω', '4.5 Ω'], tip: '병렬: 곱 ÷ 합 = 18/9', lv: 0 },
+    { q: '220 V에서 5 A가 흐르는 전열기의 소비 전력은?', a: '1100 W', w: ['44 W', '225 W'], tip: 'P = VI', lv: 0 },
+    { q: '10 Ω 저항에 2 A가 흐를 때 소비 전력은?', a: '40 W', w: ['20 W', '5 W'], tip: 'P = I²R = 4×10', lv: 0 },
+    { q: '1 kW 전기 기기를 3시간 사용한 전력량은?', a: '3 kWh', w: ['3 kW', '0.33 kWh'], tip: '전력량 = 전력 × 시간', lv: 0 },
+    { q: '10 μF 콘덴서에 100 V를 걸면 저장되는 전하량은?', a: '1×10⁻³ C', w: ['1×10⁻⁵ C', '10 C'], tip: 'Q = CV = 10×10⁻⁶ × 100', lv: 1 },
+    { q: '2 μF 콘덴서 두 개를 직렬로 연결한 합성 정전 용량은?', a: '1 μF', w: ['4 μF', '2 μF'], tip: '콘덴서 직렬은 저항 병렬처럼', lv: 1 },
+    { q: '2 μF 콘덴서 두 개를 병렬로 연결한 합성 정전 용량은?', a: '4 μF', w: ['1 μF', '2 μF'], tip: '콘덴서 병렬은 더하기', lv: 1 },
+    { q: '키르히호프 전류 법칙(KCL)의 바탕이 되는 원리는?', a: '전하 보존', w: ['에너지 보존', '운동량 보존'], tip: '들어온 전류 합 = 나간 전류 합', lv: 1 },
+    { q: '키르히호프 전압 법칙(KVL)의 바탕이 되는 원리는?', a: '에너지 보존', w: ['전하 보존', '질량 보존'], tip: '폐회로 기전력 합 = 전압 강하 합', lv: 1 },
+    { q: '인덕턴스의 단위는?', a: 'H (헨리)', w: ['F (패럿)', 'Wb (웨버)'], tip: 'F = 정전 용량 · Wb = 자속', lv: 0 },
+    { q: '자속의 단위는?', a: 'Wb (웨버)', w: ['T (테슬라)', 'H (헨리)'], tip: 'T 는 자속 밀도 (Wb/m²)', lv: 1 },
+    { q: '플레밍의 왼손 법칙으로 방향을 정하는 것은?', a: '전동기의 힘', w: ['발전기의 유도 기전력', '변압기의 2차 전압'], tip: '오른손 = 발전기', lv: 0 },
+    { q: '유도 기전력이 자속 변화를 방해하는 방향으로 생긴다는 법칙은?', a: '렌츠의 법칙', w: ['쿨롱의 법칙', '옴의 법칙'], tip: '크기는 패러데이 법칙', lv: 1 },
+    { q: '최댓값 141.4 V인 정현파 교류의 실횻값은?', a: '100 V', w: ['141.4 V', '200 V'], tip: '실횻값 = 최댓값 / √2', lv: 1 },
+    { q: '주파수가 2배가 되면 유도성 리액턴스 X_L은?', a: '2배', w: ['1/2배', '변하지 않는다'], tip: 'X_L = 2πfL', lv: 1 },
+    { q: '주파수가 2배가 되면 용량성 리액턴스 X_C는?', a: '1/2배', w: ['2배', '변하지 않는다'], tip: 'X_C = 1/(2πfC)', lv: 1 },
+    { q: 'RLC 직렬 회로가 공진할 때 임피던스는?', a: '최소 (R과 같다)', w: ['최대', '0'], tip: 'X_L = X_C 로 상쇄', lv: 2 },
+    { q: 'R = 3 Ω, X_L = 4 Ω 직렬 회로의 임피던스는?', a: '5 Ω', w: ['7 Ω', '1 Ω'], tip: 'Z = √(3² + 4²)', lv: 1 },
+    { q: '피상 전력 100 VA, 유효 전력 80 W일 때 역률은?', a: '0.8', w: ['1.25', '0.2'], tip: '역률 = 유효 / 피상', lv: 1 },
+    { q: '도선의 길이를 2배로 하면 저항은? (재질·굵기 같음)', a: '2배', w: ['1/2배', '4배'], tip: 'R = ρL/A', lv: 0 },
+    { q: '3상 Y결선에서 선간 전압은 상전압의 몇 배?', a: '√3배', w: ['3배', '1/√3배'], tip: 'Δ결선은 선전류가 √3배', lv: 2 },
+    { q: '1 A는 1초 동안 몇 C의 전하가 지나가는 전류?', a: '1 C', w: ['10 C', '1/60 C'], tip: 'I = Q/t', lv: 0 },
+  ],
+  emach: [ // 전기기기
+    { q: '1차 1000회, 2차 100회 감은 변압기에 1차 2200 V를 걸면 2차 전압은?', a: '220 V', w: ['22000 V', '22 V'], tip: 'V₁/V₂ = N₁/N₂', lv: 0 },
+    { q: '권수비 10인 변압기의 2차 전류가 50 A면 1차 전류는?', a: '5 A', w: ['500 A', '50 A'], tip: '전류는 권수에 반비례', lv: 1 },
+    { q: '변압기가 동작하는 원리는?', a: '전자기 유도', w: ['정전 유도', '열전 효과'], tip: '1차 교류 자속 → 2차 기전력', lv: 0 },
+    { q: '변압기 철심을 얇은 규소 강판으로 성층하는 주된 이유는?', a: '와전류손 감소', w: ['동손 감소', '절연 저항 감소'], tip: '규소 = 히스테리시스손 감소', lv: 1 },
+    { q: '변압기 무부하 시험으로 주로 구하는 손실은?', a: '철손', w: ['동손', '기계손'], tip: '단락 시험 = 동손', lv: 1 },
+    { q: '변압기 단락 시험으로 주로 구하는 것은?', a: '동손 (임피던스 전압)', w: ['철손', '절연 저항'], tip: '무부하 시험 = 철손', lv: 1 },
+    { q: '변압기 효율이 최대가 되는 조건은?', a: '철손 = 동손', w: ['철손 = 0', '동손이 최대일 때'], tip: '고정손 = 가변손', lv: 1 },
+    { q: '직류 발전기에서 교류 기전력을 직류로 바꾸는 부분은?', a: '정류자', w: ['계자', '전기자 철심'], tip: '직류기 3요소: 계자 · 전기자 · 정류자', lv: 0 },
+    { q: '60 Hz, 4극 동기기의 동기 속도는?', a: '1800 rpm', w: ['3600 rpm', '900 rpm'], tip: 'Ns = 120f/P', lv: 0 },
+    { q: '60 Hz, 2극 동기기의 동기 속도는?', a: '3600 rpm', w: ['1800 rpm', '7200 rpm'], tip: 'Ns = 120×60/2', lv: 0 },
+    { q: '동기 속도 1800 rpm, 회전 속도 1710 rpm인 유도 전동기의 슬립은?', a: '0.05', w: ['0.95', '0.5'], tip: 's = (Ns − N)/Ns', lv: 1 },
+    { q: '정지해 있는 유도 전동기의 슬립은?', a: '1', w: ['0', '0.5'], tip: 'N = 0 → s = 1', lv: 1 },
+    { q: '3상 유도 전동기의 회전 방향을 바꾸는 방법은?', a: '전원 3선 중 2선 바꾸기', w: ['3선 모두 바꾸기', '주파수 낮추기'], tip: '상회전 방향이 바뀜', lv: 0 },
+    { q: '동기 발전기 병렬 운전 조건이 아닌 것은?', a: '용량이 같을 것', w: ['주파수가 같을 것', '기전력의 위상이 같을 것'], tip: '크기 · 위상 · 주파수 · 파형이 같아야', lv: 2 },
+    { q: '무부하나 벨트 운전을 하면 위험 속도가 될 수 있는 전동기는?', a: '직류 직권 전동기', w: ['직류 분권 전동기', '동기 전동기'], tip: '부하 ↓ → 속도 급상승', lv: 2 },
+    { q: '부하가 변해도 동기 속도로 일정하게 도는 전동기는?', a: '동기 전동기', w: ['유도 전동기', '직류 직권 전동기'], tip: '유도 전동기는 슬립만큼 느림', lv: 1 },
+    { q: '직류를 교류로 바꾸는 전력 변환 장치는?', a: '인버터', w: ['컨버터(정류기)', '변압기'], tip: '컨버터는 교류 → 직류', lv: 0 },
+    { q: '사이리스터(SCR)의 세 단자는?', a: '애노드 · 캐소드 · 게이트', w: ['이미터 · 베이스 · 컬렉터', '소스 · 드레인 · 게이트'], tip: '게이트 신호로 턴온', lv: 1 },
+    { q: '3상 유도 전동기 Y-Δ 기동의 기동 전류는 전전압 기동의 몇 배?', a: '1/3배', w: ['1/√3배', '3배'], tip: '기동 토크도 1/3', lv: 2 },
+    { q: '직류기 전기자 반작용을 줄이는 방법은?', a: '보극 · 보상 권선 설치', w: ['계자 저항 제거', '브러시 제거'], tip: '중성축 이동을 막음', lv: 2 },
+    { q: '단상 유도 전동기에 기동 장치가 필요한 이유는?', a: '단상 교번 자계만으로는 기동 토크가 0', w: ['회전 자계가 너무 빨라서', '슬립이 0이라서'], tip: '콘덴서 기동형 · 분상 기동형', lv: 2 },
+    { q: '변압기 2차 측을 개방하고 1차에 정격 전압을 걸었을 때 흐르는 전류는?', a: '여자 전류', w: ['단락 전류', '부하 전류'], tip: '무부하 전류 = 여자 전류', lv: 2 },
+  ],
+  comp: [ // 컴퓨터활용능력 2급 필기 (컴퓨터 일반 · 스프레드시트 일반)
+    { q: '1 Byte는 몇 bit?', a: '8 bit', w: ['4 bit', '16 bit'], tip: '컴퓨터 일반', lv: 0 },
+    { q: '전원이 꺼지면 내용이 사라지는 메모리는?', a: 'RAM', w: ['ROM', 'SSD'], tip: 'RAM = 휘발성', lv: 0 },
+    { q: 'CPU와 주기억장치의 속도 차이를 줄이는 메모리는?', a: '캐시 메모리', w: ['가상 메모리', '플래시 메모리'], tip: '컴퓨터 일반', lv: 0 },
+    { q: 'IPv6 주소는 몇 비트?', a: '128비트', w: ['32비트', '64비트'], tip: 'IPv4 = 32비트', lv: 1 },
+    { q: 'Windows에서 열린 창 사이를 전환하는 바로 가기 키는?', a: 'Alt + Tab', w: ['Ctrl + Tab', 'Shift + Tab'], tip: 'Win + D = 바탕 화면', lv: 0 },
+    { q: 'Windows에서 파일 탐색기를 여는 바로 가기 키는?', a: 'Win + E', w: ['Win + D', 'Win + L'], tip: 'Win + L = 잠금', lv: 0 },
+    { q: '하드웨어를 관리하고 응용 프로그램을 실행시키는 시스템 소프트웨어는?', a: '운영 체제', w: ['워드프로세서', '압축 프로그램'], tip: '예: Windows', lv: 0 },
+    { q: '엑셀에서 A1 셀을 절대 참조로 나타낸 것은?', a: '$A$1', w: ['A$1', '#A#1'], tip: 'F4로 참조 형식 전환', lv: 0 },
+    { q: '엑셀 수식 입력 중 참조 형식(상대·절대·혼합)을 바꾸는 키는?', a: 'F4', w: ['F2', 'F9'], tip: 'F2 = 셀 편집', lv: 1 },
+    { q: '=ROUND(3.14159, 2)의 결과는?', a: '3.14', w: ['3.1', '3.142'], tip: '소수 둘째 자리까지 반올림', lv: 0 },
+    { q: '=ROUNDDOWN(5.678, 1)의 결과는?', a: '5.6', w: ['5.7', '5.68'], tip: '자릿수 아래를 내림', lv: 1 },
+    { q: '=LEFT("컴퓨터활용", 2)의 결과는?', a: '컴퓨', w: ['컴', '활용'], tip: '왼쪽부터 2글자', lv: 0 },
+    { q: '=MID("2028수능", 5, 2)의 결과는?', a: '수능', w: ['28', '8수'], tip: '5번째 글자부터 2글자', lv: 1 },
+    { q: '범위에서 비어 있지 않은 셀의 개수를 세는 함수는?', a: 'COUNTA', w: ['COUNT', 'COUNTBLANK'], tip: 'COUNT = 숫자 셀만', lv: 1 },
+    { q: '0으로 나누었을 때 나타나는 오류는?', a: '#DIV/0!', w: ['#NAME?', '#N/A'], tip: '#NAME? = 함수 이름 오류', lv: 0 },
+    { q: '함수 이름을 잘못 입력했을 때 나타나는 오류는?', a: '#NAME?', w: ['#VALUE!', '#REF!'], tip: '#REF! = 참조 셀이 삭제됨', lv: 1 },
+    { q: '엑셀에서 한 셀 안에서 줄을 바꾸는 키는?', a: 'Alt + Enter', w: ['Ctrl + Enter', 'Shift + Enter'], tip: 'Ctrl + Enter = 범위에 같은 값 입력', lv: 0 },
+    { q: '오늘 날짜를 표시하는 함수는?', a: '=TODAY()', w: ['=NOW(1)', '=DATE()'], tip: 'NOW() = 날짜 + 시간', lv: 0 },
+    { q: '첫 열에서 값을 찾아 같은 행의 다른 열 값을 가져오는 함수는?', a: 'VLOOKUP', w: ['HLOOKUP', 'INDEX'], tip: 'HLOOKUP = 첫 행에서 찾기', lv: 1 },
+    { q: '많은 데이터를 행·열 기준으로 요약·분석하는 엑셀 기능은?', a: '피벗 테이블', w: ['목표값 찾기', '틀 고정'], tip: '스프레드시트 일반', lv: 1 },
+    { q: '조건에 맞는 셀의 개수를 세는 함수는?', a: 'COUNTIF', w: ['SUMIF', 'IF'], tip: '=COUNTIF(범위, 조건)', lv: 0 },
+    { q: '엑셀에서 수식은 어떤 기호로 시작?', a: '=', w: ['#', '@'], tip: '=SUM(…)', lv: 0 },
+  ],
+  hk: [ // 한국사능력검정 심화 대비 (IM_QB.hist 와 함께 씀)
+    { q: '신라의 삼국 통일 후 9주 5소경을 정비한 왕은?', a: '신문왕', w: ['문무왕', '진흥왕'], tip: '녹읍 폐지 · 국학 설립', lv: 1 },
+    { q: '고려 광종이 실시해 호족 세력을 약화시킨 정책은?', a: '노비안검법', w: ['기인 제도', '사심관 제도'], tip: '과거제도 광종(958)', lv: 1 },
+    { q: '조선 세종 때 만든 우리 실정에 맞는 농서는?', a: '농사직설', w: ['금양잡록', '산림경제'], tip: '1429년', lv: 1 },
+    { q: '조선 영조가 붕당 정치의 폐단을 막으려 펼친 정책은?', a: '탕평책', w: ['대동법', '호패법'], tip: '탕평비 건립', lv: 0 },
+    { q: '1876년 일본과 맺은 최초의 근대적 조약은?', a: '강화도 조약', w: ['을사늑약', '톈진 조약'], tip: '조일 수호 조규 · 불평등 조약', lv: 0 },
+    { q: '1894년 신분제를 폐지한 개혁은?', a: '갑오개혁', w: ['갑신정변', '광무개혁'], tip: '군국기무처', lv: 1 },
+    { q: '1907년 일본에 진 빚을 갚자며 일어난 운동은?', a: '국채 보상 운동', w: ['물산 장려 운동', '브나로드 운동'], tip: '대구에서 시작', lv: 1 },
+    { q: '1919년 상하이에 수립된 정부는?', a: '대한민국 임시정부', w: ['조선 총독부', '대한 제국'], tip: '3·1 운동 이후', lv: 0 },
+    { q: '1948년 제헌 국회가 만든 것은?', a: '제헌 헌법', w: ['유신 헌법', '국가 재건 최고 회의'], tip: '7월 17일 공포', lv: 1 },
+    { q: '1960년 3·15 부정 선거에 맞서 일어난 민주 운동은?', a: '4·19 혁명', w: ['5·18 민주화 운동', '6월 민주 항쟁'], tip: '이승만 정부 붕괴', lv: 0 },
+    { q: '1987년 대통령 직선제 개헌을 이끌어 낸 운동은?', a: '6월 민주 항쟁', w: ['4·19 혁명', '부마 민주 항쟁'], tip: '6·29 선언', lv: 1 },
+    { q: '고구려 을지문덕이 수나라 군대를 크게 물리친 싸움은?', a: '살수 대첩', w: ['귀주 대첩', '한산도 대첩'], tip: '612년', lv: 0 },
+  ],
+};
+// 학교장 추천 · 교장실 (가상 인물)
+const IMG_PRINCIPAL = { name: '윤태호 교장 선생님', short: '교장 선생님' };
+
+/* ---- 담임 방과후 자격증 지도 — 주제별 칠판 · 코칭 문항(3지 · ans 인덱스) ---- */
+const IMG_COACH = {
+  gisa: { title: '전자기능사 실기 · 회로 점검', loc: 'door:lab', icon: '🔧', board: ['① 부품 극성 먼저 (LED · 다이오드 · 전해 콘덴서)', '② 납은 패드 2초 예열 → 원뿔 모양', '③ 전원 넣기 전 멀티미터 도통 시험'], skill: 'jeon',
+    items: [
+      { q: '전해 콘덴서를 꽂을 때 가장 먼저 볼 것은?', opts: ['극성 (− 줄무늬)', '색깔', '크기 순서'], ans: 0, tip: '극성 반대 = 파손' },
+      { q: '납이 공처럼 뭉쳤다(냉납). 쌤의 처방은?', opts: ['패드를 먼저 데우고 다시', '납을 더 많이', '인두 온도 최저로'], ans: 0, tip: '패드 예열 2초' },
+      { q: 'LED가 안 켜진다. 첫 점검은?', opts: ['LED 방향과 저항값', '전원 전압 2배로', '부품 전부 교체'], ans: 0, tip: '긴 다리 = +' },
+      { q: '전원 넣기 전 마지막 확인은?', opts: ['도통 시험으로 단락 확인', '일단 전원부터', '납땜 광택만 보기'], ans: 0, tip: '쇼트 → 감점·위험' },
+      { q: '실기 시험에서 시간이 모자랄 때?', opts: ['배치·납땜 정확히 → 동작 확인 우선', '배선 미관에 집중', '처음부터 다시'], ans: 0, tip: '동작이 점수의 핵심' },
+    ] },
+  com: { title: '컴활 2급 · 엑셀 함수', loc: 'door:class', icon: '💻', board: ['=SUM · AVERAGE · MAX · MIN', '=IF(조건, 참, 거짓) · =COUNTIF(범위, 조건)', '아래로 복사할 범위는 $절대 참조$ (F4)'], skill: 'com',
+    items: [
+      { q: '국어 B2~B6의 평균은?', opts: ['=AVERAGE(B2:B6)', '=SUM(B2:B6)/2', '=AVG(B2,B6)'], ans: 0, tip: 'AVERAGE(범위)' },
+      { q: '순위 함수를 아래로 복사할 때 범위는?', opts: ['$D$2:$D$6', 'D2:D6', 'D$2:D6'], ans: 0, tip: 'F4 → 절대 참조' },
+      { q: '90점 이상 인원 세기는?', opts: ['=COUNTIF(B2:B6,">=90")', '=COUNT(B2:B6)', '=IF(B2>=90)'], ans: 0, tip: 'COUNTIF(범위, "조건")' },
+      { q: '합계 120 이상이면 「합격」은?', opts: ['=IF(D2>=120,"합격","불합격")', '=IF(D2,"합격")', '=COUNTIF(D2,"합격")'], ans: 0, tip: 'IF(조건, 참, 거짓)' },
+      { q: '실기 40분, 쌤의 시간 배분 팁은?', opts: ['아는 작업부터 빠르게 · 함수는 마지막 검토', '첫 문제에 30분', '서식부터 예쁘게'], ans: 0, tip: '70점 이상이면 합격' },
+    ] },
+  hk: { title: '한능검 심화 · 연표 한 장', loc: 'door:class', icon: '📜', board: ['고조선 → 삼국 → 남북국 → 고려 → 조선', '1876 강화도 조약 · 1894 갑오개혁 · 1919 3·1 운동', '1960 4·19 · 1987 6월 민주 항쟁'], skill: 'hist',
+    items: [
+      { q: '시대 순서가 맞는 것은?', opts: ['강화도 조약 → 갑오개혁 → 3·1 운동', '갑오개혁 → 강화도 조약 → 3·1 운동', '3·1 운동 → 갑오개혁 → 강화도 조약'], ans: 0, tip: '1876 → 1894 → 1919' },
+      { q: '탕평책을 펼친 왕은?', opts: ['영조', '세조', '광해군'], ans: 0, tip: '영조 · 정조' },
+      { q: '대한민국 임시정부가 세워진 곳은?', opts: ['상하이', '도쿄', '블라디보스토크'], ans: 0, tip: '1919년' },
+      { q: '심화 3급 기준 점수는?', opts: ['60점 이상', '50점 이상', '80점 이상'], ans: 0, tip: '80↑ 1급 · 70↑ 2급 · 60↑ 3급' },
+      { q: '4·19 혁명이 일어난 해는?', opts: ['1960년', '1980년', '1945년'], ans: 0, tip: '3·15 부정 선거' },
+    ] },
+  gong: { title: '공무원 · 전공 기출 + 면접', loc: 'door:class', icon: '🏛️', board: ['전기이론: V=IR · P=VI · 직렬 더하기 / 병렬 곱÷합', '전기기기: Ns = 120f/P · 슬립 s = (Ns−N)/Ns', '면접: 결론 먼저 → 경험 하나 → 공직가치로 마무리'], skill: 'gong',
+    items: [
+      { q: '60 Hz, 4극 동기 속도는?', opts: ['1800 rpm', '3600 rpm', '1200 rpm'], ans: 0, tip: '120×60/4' },
+      { q: '6 Ω ∥ 3 Ω 합성 저항은?', opts: ['2 Ω', '9 Ω', '4.5 Ω'], ans: 0, tip: '곱 ÷ 합' },
+      { q: '면접 답변 첫 문장은?', opts: ['결론부터 한 문장', '긴 자기소개', '「잘 모르겠지만…」'], ans: 0, tip: '두괄식' },
+      { q: '「왜 공무원?」에 좋은 근거는?', opts: ['실습에서 느낀 공익 · 안전 경험', '연금이 좋아서', '부모님이 하라고 해서'], ans: 0, tip: '내 경험 + 공직가치' },
+      { q: '변압기 최대 효율 조건은?', opts: ['철손 = 동손', '철손 = 0', '동손 최대'], ans: 0, tip: '고정손 = 가변손' },
+    ] },
+  job: { title: '취업 면접 · 자기소개 다듬기', loc: 'door:class', icon: '🧰', board: ['① 1분 자기소개: 실습 경험 하나 + 숫자 하나', '② 「왜 우리 회사?」 → 직무와 내 자격증 연결', '③ 마지막 질문엔 「현장에서 배우고 싶은 것」'], skill: 'jeon',
+    items: [
+      { q: '1분 자기소개에 꼭 넣을 것은?', opts: ['실습 경험 하나와 결과', '취미 열 가지', '좋아하는 연예인'], ans: 0, tip: '경험 + 숫자' },
+      { q: '「입사 후 포부」 좋은 답은?', opts: ['현장 기술을 배워 상위 자격까지', '빨리 이직하겠다', '잘 모르겠다'], ans: 0, tip: '성장 계획' },
+      { q: '모르는 질문을 받으면?', opts: ['솔직히 말하고 배우겠다고', '아무 말이나 길게', '침묵'], ans: 0, tip: '솔직함도 실력' },
+      { q: '면접장 첫인상은?', opts: ['밝은 인사 · 바른 자세', '휴대폰 확인', '늦게 들어가기'], ans: 0, tip: '인사부터 면접' },
+      { q: '「실습에서 어려웠던 점」 답의 구조는?', opts: ['문제 → 원인 → 해결 → 배운 점', '어려운 점 없음', '남 탓'], ans: 0, tip: 'STAR 구조' },
+    ] },
+  dongil: { title: '동일계 · 실습 기록 정리', loc: 'door:class', icon: '🎓', board: ['생기부 실습 기록 → 전공 학과와 연결', '「회로 오류를 스스로 찾아 수정」 같은 과정 중심', '전공 탐구 한 줄: 센서 · 임베디드 · AI'], skill: 'saeng',
+    items: [
+      { q: '동일계 전형에서 가장 중요한 것은?', opts: ['같은 계열 학과 · 학생부', '수능 최저', '논술'], ans: 0, tip: '기준학과 이수' },
+      { q: '실습 기록을 쓸 때 핵심은?', opts: ['과정과 해결', '결과 사진만', '친구 이름'], ans: 0, tip: '과정 중심' },
+      { q: '지원 가능 학과는?', opts: ['전자공학과', '경영학과', '국어교육과'], ans: 0, tip: '동일 계열' },
+      { q: '졸업 작품 보고서 순서는?', opts: ['목적 → 설계 → 측정 → 개선', '결론 → 목차', '사진 → 끝'], ans: 0, tip: '측정 → 개선' },
+      { q: '출결이 중요한 이유는?', opts: ['학생부 성실성 기록', '상관없음', '수능 점수'], ans: 0, tip: '학생부 위주' },
+    ] },
+  jiktam: { title: '직탐 · 성공적인 직업생활 핵심', loc: 'door:class', icon: '📝', board: ['근로계약서 = 서면 · 교부', '안전보건표지: 금지 빨강 · 경고 노랑 · 지시 파랑 · 안내 초록', '홀랜드 유형 RIASEC'], skill: 'tam',
+    items: [
+      { q: '지시 표지의 색은?', opts: ['파랑', '빨강', '노랑'], ans: 0, tip: '지시 = 파랑' },
+      { q: '근로계약서는?', opts: ['서면으로 쓰고 교부', '말로만', '필요 없음'], ans: 0, tip: '서면 · 교부' },
+      { q: '홀랜드 유형에서 R은?', opts: ['현실형', '탐구형', '예술형'], ans: 0, tip: 'RIASEC' },
+      { q: '위험하면 작업을 멈출 권리는?', opts: ['작업중지권', '파업권', '휴가권'], ans: 0, tip: '산업안전' },
+      { q: '직탐 시험 시간은?', opts: ['25문항 40분', '20문항 30분', '45문항 80분'], ans: 0, tip: '2028 수능' },
+    ] },
+};
+const IMG_COACH_MI = { 0: 1, 5: 1, 6: 1, 8: 1, 10: 1, 11: 1 }; // 담임 지도가 있는 달 (학기 중 · 일주일에 몇 번 → 하루 = 한 달이라 이 달들에)
+
+/* ---- 데이터 보강: 목표 · 문항 · 사건 · 달 사건 ---- */
+const IMG_EVENTS = {
+  gongMom: { who: '엄마', npc: 'mom', loc: 'living', tag: 'family', title: '엄마 「진짜 공무원?」', only: ['voc'], goal: ['gong'], mi: [0, 4],
+    lines: [['엄마', '{voc}, 담임 쌤 문자 받았어. 공무원 준비한다며? …진짜 공무원?'], ['엄마', '고등학교 졸업하고 바로 공무원이 될 수 있는 거야? 엄마는 대학 나와야 되는 줄 알았지.'], ['me', '특성화고 전형이 따로 있어. 군무원, 교육청, 국가직 지역인재. 자격증 세 개부터.']],
+    choices: [{ t: '응시자격 체크리스트 보여 주기', cost: { min: 15 }, gain: { mental: 6 }, result: '엄마가 냉장고에 붙였다. 「기능사 · 한능검 · 컴활」 — 엄마 글씨로.' },
+      { t: '"엄마, 나 진짜 해 볼래"', gain: { mental: 8 }, result: '엄마: "그래. 네가 하겠다는 건 엄마가 다 밀어줄게. 밥은 꼭 먹고."' }] },
+  gongSenior: { who: '단톡방', loc: 'room', tag: 'friend', title: '선배 합격 수기', only: ['voc'], goal: ['gong'], mi: [2, 3],
+    lines: [['단톡방', '[AI전자과 동문방] 작년 졸업한 민재 선배 — 지역인재 9급 최종 합격 수기 올림 📄'], ['민재 선배', '(수기) 하루 기출 30문제, 한능검은 겨울방학에, 컴활 실기는 함수 5개만 손에 익히면 됨. 면접은 내 실습 얘기가 제일 강했다.'], ['me', '(실습 얘기… 나도 냉납이라면 할 말이 많다.)']],
+    choices: [{ t: '수기 캡처해서 책상에 붙이기', gain: { mental: 6 }, result: '「하루 30문제」 포스트잇이 스탠드 옆에 붙었다.' },
+      { t: '선배한테 질문 DM', cost: { min: 15 }, gain: { study: 2.5, sk: 'gong', mental: 3 }, result: '선배: "전기기기는 공식 다섯 개부터. 모르면 언제든 물어봐."' }] },
+  gongClass: { who: '담임 쌤', npc: 'homeroom', loc: 'staff', tag: 'study', title: '공무원 준비반 개강', only: ['voc'], goal: ['gong'], mi: [4, 5],
+    lines: [['담임 쌤', '방과후 「공무원 준비반」 이번 주 시작이야. 우리 학년 여섯 명. 교재는 학교 예산으로 나왔어.'], ['도윤', '(교실 뒤에서) 오 공무원반 간지 난다. 난 취업반이지만 응원함.'], ['me', '(기출 문제집 세 권. 표지에 이름을 꾹꾹 썼다.)']],
+    choices: [{ t: '첫 주 기출 1회독 계획 세우기', cost: { min: 20 }, gain: { study: 3, sk: 'gong' }, result: '전기이론 → 전기기기 → 물리. 플래너 세 칸이 채워졌다.' },
+      { t: '준비반 친구들과 단톡 만들기', cost: { min: 10 }, gain: { mental: 7 }, result: '방 이름: 「9급 6인방」. 첫 메시지: "하루 30문제!"' }] },
+  gongGichul: { who: '나', loc: 'library', tag: 'study', title: '기출 회독', only: ['voc'], goal: ['gong'], pool: true, mi: [4, 12],
+    lines: [['me', '전기기기 기출 3회독째. 틀린 문제에만 빨간 별이 늘어 간다.'], ['me', '슬립, 동기 속도, 철손 = 동손… 실습실에서 만졌던 모터가 문제 속에서 돈다.']],
+    choices: [{ t: '빨간 별 문제만 다시 풀기', cost: { min: 30 }, gain: { study: 3, sk: 'gong' }, result: '빨간 별 열두 개 → 다섯 개.' },
+      { t: '공식 다섯 개 백지 복습', cost: { min: 20 }, gain: { study: 2, sk: 'gong', mental: 2 }, result: 'Ns = 120f/P. 이제 손이 먼저 쓴다.' }] },
+  gongDad: { who: '아빠', npc: 'dad', loc: 'living', tag: 'family', title: '아빠 「군무원이 뭐냐」', only: ['voc'], goal: ['gong'], mi: [7, 8],
+    lines: [['아빠', '군무원? 아빠 군대 있을 때 부대에 전기 고치던 아저씨들 있었는데, 그분들이 군무원이었나?'], ['me', '맞아, 군인이 아니라 공무원. 부대 전기 설비 담당 같은 거.'], ['아빠', '그분들 덕분에 겨울에 막사가 따뜻했지. …우리 딸/아들이 그걸 한다고?']],
+    choices: [{ t: '"응. 나라의 불 켜는 사람 할래"', gain: { mental: 8 }, result: '아빠가 괜히 헛기침을 했다. 눈가가 빨갰다.' },
+      { t: '아빠한테 슬립 공식 설명해 주기', cost: { min: 15 }, gain: { study: 2, sk: 'gong', mental: 4 }, result: '아빠: "…모르겠는데 멋있다."' }] },
+  gongIvStudy: { who: '민재 선배', loc: 'library', tag: 'friend', title: '선배랑 면접 스터디', only: ['voc'], goal: ['gong'], mi: [9, 13],
+    lines: [['민재 선배', '(영상 통화) 면접관이 꼭 묻는 거 세 개 — 왜 공무원, 실패 경험, 청렴. 하나씩 해 보자.'], ['민재 선배', '외운 문장 말고, 실습실에서 진짜 있었던 일로 말해. 그게 제일 세.']],
+    choices: [{ t: '실패 경험 — 냉납 이야기로 답하기', cost: { min: 20 }, gain: { mental: 5, flag: 'ivSenior' }, result: '선배: "오, 그 대답 좋다. 숫자 하나만 넣어 봐 — 몇 개 고쳤는지."' },
+      { t: '청렴 질문 꼬리 질문까지', cost: { min: 20 }, gain: { mental: 3, saeng: 0.5, flag: 'ivSenior' }, result: '"두 번째로 놓고 가시면?" — "규정대로 신고·반환합니다." 선배가 엄지를 들었다.' }] },
+  vocHrText: { who: '담임 쌤', loc: 'room', tag: 'study', title: '시험 전날 담임 문자', only: ['voc'], mi: [5, 12], run: (E) => imGongHrText(E) },
+  gongRegCrisis: { who: '휴대폰', loc: 'room', tag: 'study', title: '한능검 접수 깜빡 위기', only: ['voc'], goal: ['gong'], mi: [2, 2], run: (E) => imGongRegCrisis(E) },
+};
+(function imGongPatchData() {
+  try {
+    IM_VOC.goals.push({ id: 'gong', icon: '🏛️', name: '공무원(특성화고 전형)', sub: '8월 군무원 · 9월 교육청 · 11월 지역인재', desc: '기능사 1개 + 한국사능력검정 3급 이상 + 컴활 2급이 응시자격(게임 기준). 8월 군무원 9급 → 9월 경기도교육청 경력경쟁 → 11월 국가직 지역인재 9급(학교장 추천). 필기 → 면접 → 최종 합격.' });
+    Object.keys(IMG_QB).forEach((k) => { IM_QB[k] = IMG_QB[k]; IM_QB[k].forEach((x) => { x.o = x.w; }); });
+    Object.assign(IM_EVENTS, IMG_EVENTS);
+    if (IM_EVENTS.vocSuneungCheer && Array.isArray(IM_EVENTS.vocSuneungCheer.goal)) IM_EVENTS.vocSuneungCheer.goal.push('gong');
+    const A = IM_VOC.evAt, add = (i, list) => { A[i] = (A[i] || []).concat(list); };
+    add(1, ['gongMom@21:30']); add(2, ['gongSenior@16:40', 'gongRegCrisis@17:20']); add(4, ['gongClass@21:30']);
+    add(5, ['vocHrText@22:05']); add(7, ['vocHrText@22:05', 'gongDad@21:40']); add(8, ['vocHrText@22:05']); add(10, ['gongIvStudy@21:20', 'vocHrText@22:05']); add(11, ['vocHrText@22:05']);
+    IM_VOC.titles.gong = { 2: '겨울방학 · 컴활 필기 · 한능검 접수', 3: '봄방학 · 한능검 · 컴활 실기', 5: '실습 주간 · 군무원 원서', 6: '수행평가 · 의무검정 원서 · 한능검', 8: '1학기 기말 · 학교장 추천', 9: '8월 · 군무원 9급 필기', 10: '9월 · 경기도교육청 필기 (토)', 11: '2학기 기말 · 군무원 면접', 12: '11월 · 지역인재 9급 필기 (토)', 13: '12월 · 발표 · 지역인재 면접', 14: '졸업식 · 그리고 첫 출근' };
+  } catch (e) { /* 데이터 없음 */ }
+})();
+
+/* =====================================================================
+   1. 미니
+   ===================================================================== */
+// ---- 아침 조회 · 스터디플래너 검사 (voc 공통) ----
+// o = { yest:{plan, study, att, tot, minis, first}, items:[{t, ans:-1|k, opts}], rushBot, onEnd }
+function imPlannerMini(E, o = {}) {
+  const fin = imMnFin(E, o), C = E.C, Y = o.yest || {};
+  const items = o.items || [];
+  let stamp = null;
+  const m = imMnChoiceMini(E, {
+    fin, title: '스터디플래너 검사', banner: '아침 조회 · 플래너 검사', bannerSub: '쌤이 줄 끝에서부터 온다!', bg: 'classroom', scene: { teacher: { body: '#6B4A8A', hair: '#2B2233', long: true }, board: '아침 조회 · 스터디플래너 검사', keywords: ['어제 계획 vs 실제 공부 시간', '오늘 칸은 시간표 보고 채우기', '빈칸은 빈칸대로 — 정직이 먼저'] }, style: 'class', bpm: 104, items, time: 4.2, endHold: 2.6, fbDur: 0.55,
+    headText: (mm) => `플래너 검사 · 쌤까지 ${Math.max(0, items.length - mm.i)}자리`, headFrac: (mm, st) => (mm.phase === 'end' ? 0 : 1 - (st - mm.g0) / (items.length * 4.2 + 1.5)),
+    botPick: (mm, it) => (it.ans < 0 ? (o.rushBot ? 1 : 0) : it.ans),
+    onEndPhase: (mm) => { E.setPad(null); stamp = o.judge ? o.judge(mm) : null; mm.stampRes = stamp; if (stamp && stamp.good) { E.sfx.stamp(); E.burst(E.VW / 2, E.VH * 0.3, C.chalk, 26); } else E.sfx.page(); },
+    drawBody(mm, st) {
+      const g = E.g, VW = E.VW, top = 98, bot = (mm.cardsTop || E.VH * 0.6) - 14, w = VW - 32, h = Math.min(184, bot - top);
+      if (h < 80 || mm.phase === 'end') return;
+      imMnPaper(E, 16, top, w, h, '#FFFDF4', 10);
+      g.fillStyle = '#FF8A7A'; E.rr(16, top, w, 7, 3); g.fill();
+      g.fillStyle = '#1B2340'; g.font = `15px ${E.FD}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, `📒 스터디플래너 · ${o.label || ''}`, w - 24), 28, top + 28);
+      g.font = `800 11.5px ${E.FB}`; g.fillStyle = '#6A7393';
+      if (Y.first) g.fillText('어제 기록 없음 — 오늘이 첫 장!', 28, top + 48);
+      else {
+        g.fillText(imMnFitStr(E, `어제 계획 ${(Y.plan / 60).toFixed(1)}h → 실제 공부 ${(Y.study / 60).toFixed(1)}h · 출석 블록 ${Y.att}/${Y.tot} · 미니 ${Y.minis}개`, w - 24), 28, top + 48);
+        const r = E.clamp(Y.study / Math.max(60, Y.plan), 0, 1);
+        g.fillStyle = '#E3E7F0'; E.rr(28, top + 56, w - 24, 10, 5); g.fill();
+        g.fillStyle = r >= 0.6 ? C.act : r >= 0.35 ? C.chalk : C.hot; E.rr(28, top + 56, (w - 24) * r, 10, 5); g.fill();
+      }
+      // 오늘 칸 (채운 것 / 빈칸)
+      const rows = items.filter((x) => x.ans >= 0);
+      rows.forEach((it, k) => {
+        const yy = top + 86 + k * 24; if (yy > top + h - 30) return;
+        const j = items.indexOf(it), done = mm.picks[j] != null && mm.picks[j] >= 0;
+        g.fillStyle = '#8A93AD'; g.font = `13px ${E.FD}`; g.textAlign = 'left'; g.fillText(it.at || '', 28, yy);
+        g.strokeStyle = '#C9D3E3'; g.lineWidth = 1; g.beginPath(); g.moveTo(80, yy + 5); g.lineTo(16 + w - 12, yy + 5); g.stroke();
+        g.fillStyle = done ? (mm.oks[j] ? '#1F4E9C' : '#C62828') : '#B9C0DA'; g.font = `800 12.5px ${E.FB}`;
+        g.fillText(imMnFitStr(E, done ? it.opts[mm.picks[j]] : '(빈칸)', w - 80), 84, yy);
+      });
+      // 쌤이 다가온다 (책상 줄)
+      const n = 6, fx = E.clamp((st - mm.g0) / (items.length * 4.2), 0, 1), bx = 30, bw = w - 28, by = top + h - 16;
+      for (let k = 0; k < n; k++) { g.fillStyle = '#D9C4A0'; E.rr(bx + k * bw / n + 4, by - 6, bw / n - 8, 8, 2); g.fill(); }
+      g.font = `16px ${E.FD}`; g.textAlign = 'center'; g.fillText('👩‍🏫', bx + fx * (bw - 30), by - 8); g.fillText('🙋', bx + bw - 6, by - 8);
+    },
+    drawEnd(mm, k) {
+      const g = E.g, VW = E.VW, VH = E.VH, R = mm.stampRes || {};
+      g.globalAlpha = k; g.fillStyle = 'rgba(10,12,24,.5)'; g.fillRect(0, 0, VW, VH);
+      const x = 24, y = Math.max(170, VH * 0.26), w = VW - 48, h = 112;
+      imMnPaper(E, x, y, w, h, '#FFFDF4', 14);
+      g.fillStyle = '#1B2340'; g.font = `20px ${E.FD}`; g.textAlign = 'center'; g.fillText(R.good ? '👍 칭찬 도장!' : '「오늘은 꼭!」', VW / 2, y + 36);
+      g.font = `800 12.5px ${E.FB}`; g.fillStyle = '#4A5675';
+      const ls = E.wrapText(R.line || '', w - 30, g.font, 3); imMnTextLines(E, ls, VW / 2, y + 62, 17, '#4A5675', 'center');
+      g.globalAlpha = 1;
+      if (k >= 1) imMnStamp(E, R.good ? '참 잘했어요' : '오늘은 꼭!', VW / 2, y + h + 34, 1, R.good ? '#C62828' : '#3B6FD8');
+    },
+    score: (mm) => { const L = items.filter((x) => x.ans >= 0); return L.length ? L.filter((x) => mm.oks[items.indexOf(x)]).length / L.length : 1; },
+  });
+  return m;
+}
+
+// ---- 담임 방과후 자격증 지도 (화이트보드 + 담임 · 3문항) ----
+function imCoachMini(E, o = {}) {
+  const fin = imMnFin(E, o), T = o.topic || IMG_COACH.gisa;
+  const items = E.shuffle(T.items.slice()).slice(0, 3).map((x) => { const sh = E.shuffle(x.opts.map((t, k) => ({ t, k }))); return { q: x.q, opts: sh.map((y) => y.t), ans: sh.findIndex((y) => y.k === x.ans), tip: x.tip, time: 7 }; });
+  const m = imMnChoiceMini(E, {
+    fin, title: T.title, banner: `담임 쌤 자격증 지도 · ${T.icon}`, bannerSub: T.title, bg: 'coach', scene: { board: T.title, lines: T.board, snack: !!o.snack, place: o.place || '', icon: T.icon }, style: 'focus', bpm: 96, items, reveal: true, endHold: 2, tipLabel: '쌤 팁: ',
+    okText: '쌤: 그거야!', badText: '쌤: 다시 보자',
+    drawBody(mm) {
+      const g = E.g, it = mm.cur(); if (!it || mm.phase === 'end') return;
+      const top = Math.max(250, (mm.cardsTop || E.VH * 0.6) - 96);
+      E.bubble(E.VW / 2, top, '김선영 쌤', it.q);
+    },
+  });
+  return m;
+}
+
+// ---- 컴활 2급 실기 (스프레드시트) — 칸에 들어갈 수식 고르기 ----
+const IMG_SHEET = { head: ['', 'A', 'B', 'C', 'D', 'E', 'F'], cols: ['이름', '국어', '영어', '합계', '결과', '순위'], rows: [['김가온', 92, 88], ['이나래', 78, 70], ['박다솜', 85, 95], ['최라온', 64, 58], ['정마루', 90, 81]] };
+const IMG_SIL = [
+  { cell: 'D2', r: 2, c: 4, ask: '합계 (국어 + 영어)', a: '=SUM(B2:C2)', w: ['=SUM(B2:B6)', '=AVERAGE(B2:C2)'] },
+  { cell: 'E2', r: 2, c: 5, ask: '합계 120 이상이면 「합격」, 아니면 「불합격」', a: '=IF(D2>=120,"합격","불합격")', w: ['=IF(D2<120,"합격","불합격")', '=COUNTIF(D2,"합격")'] },
+  { cell: 'B7', r: 7, c: 2, ask: '국어 평균', a: '=AVERAGE(B2:B6)', w: ['=SUM(B2:B6)/2', '=MAX(B2:B6)'] },
+  { cell: 'F2', r: 2, c: 6, ask: '합계 순위 (아래로 복사할 것)', a: '=RANK.EQ(D2,$D$2:$D$6)', w: ['=RANK.EQ(D2,D2:D6)', '=RANK.EQ($D$2,D2:D6)'] },
+  { cell: 'B8', r: 8, c: 2, ask: '국어 90점 이상 인원', a: '=COUNTIF(B2:B6,">=90")', w: ['=COUNT(B2:B6)', '=SUMIF(B2:B6,">=90")'] },
+  { cell: 'C7', r: 7, c: 3, ask: '영어 최고 점수', a: '=MAX(C2:C6)', w: ['=MIN(C2:C6)', '=LARGE(C2:C6,2)'] },
+];
+function imComSilMini(E, o = {}) {
+  const fin = imMnFin(E, o), C = E.C;
+  const tasks = E.shuffle(IMG_SIL.slice()).slice(0, 4);
+  const items = tasks.map((x) => { const op = E.shuffle([x.a, x.w[0], x.w[1]]); return { q: `${x.cell} — ${x.ask}`, opts: op, ans: op.indexOf(x.a), tip: x.a, time: 9, task: x }; });
+  const m = imMnChoiceMini(E, {
+    fin, title: '컴활 2급 실기', banner: '컴퓨터활용능력 2급 · 실기', bannerSub: '스프레드시트 · 70점 이상 합격', bg: 'exam', scene: { room: '대한상공회의소 상시검정 · 컴퓨터실', board: '컴퓨터활용능력 2급 실기', sub: '스프레드시트 실무 · 40분' }, style: 'focus', bpm: 100, items, reveal: true, endHold: 1.6,
+    headText: (mm) => `실기 · 작업 ${Math.min(mm.i + 1, items.length)}/${items.length} · 남은 시간 ${Math.max(0, 40 - mm.i * 10)}분`,
+    drawBody(mm) {
+      const g = E.g, VW = E.VW, it = mm.cur(); if (!it || mm.phase === 'end') return;
+      const top = 100, x0 = 10, w = VW - 20, cw = [28].concat(Array(6).fill((w - 28) / 6)), rh = 18, bot = (mm.cardsTop || E.VH * 0.6) - 10;
+      const H = Math.min(rh * 10 + 30, bot - top); if (H < 120) return;
+      g.fillStyle = '#FFFFFF'; E.rr(x0, top, w, H, 6); g.fill();
+      g.fillStyle = '#1F7A4D'; E.rr(x0, top, w, 22, 6); g.fill(); g.fillRect(x0, top + 14, w, 8);
+      g.fillStyle = '#FFFFFF'; g.font = `800 11px ${E.FB}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, `fx  ${mm.phase === 'fb' ? it.opts[mm.sel] || '' : it.task.cell + ' = ?'}`, w - 16), x0 + 8, top + 15);
+      const cx = (c) => x0 + cw.slice(0, c).reduce((a, z) => a + z, 0);
+      for (let r = 0; r <= 8; r++) {
+        const y = top + 24 + r * rh; if (y + rh > top + H) break;
+        for (let c = 0; c <= 6; c++) {
+          const X = cx(c), W2 = cw[c], hd = r === 0 || c === 0, tgt = r === it.task.r && c === it.task.c;
+          g.fillStyle = tgt ? '#FFE38A' : hd ? '#E9EEF8' : '#FFFFFF'; g.fillRect(X, y, W2, rh);
+          g.strokeStyle = tgt ? '#C62828' : '#C9D3E3'; g.lineWidth = tgt ? 2 : 1; g.strokeRect(X + 0.5, y + 0.5, W2 - 1, rh - 1);
+          let t = '';
+          if (r === 0) t = IMG_SHEET.head[c]; else if (c === 0) t = String(r);
+          else if (r === 1) t = IMG_SHEET.cols[c - 1];
+          else if (r <= 6) { const row = IMG_SHEET.rows[r - 2]; t = c <= 3 ? String(row[c - 1]) : c === 4 && it.task.c !== 4 && mm.i > 0 ? String(row[1] + row[2]) : ''; }
+          else if (r === 7 && c === 1) t = '평균/최고'; else if (r === 8 && c === 1) t = '90↑ 인원';
+          if (tgt) t = mm.phase === 'fb' && mm.oks[mm.i] ? '✓' : '?';
+          g.fillStyle = hd ? '#4A5675' : '#1B2340'; g.font = `800 ${hd ? 10 : 10.5}px ${E.FB}`; g.textAlign = 'center'; g.fillText(imMnFitStr(E, t, W2 - 4), X + W2 / 2, y + 13);
+        }
+      }
+    },
+  });
+  return m;
+}
+
+/* =====================================================================
+   2. 상태 · 도우미
+   ===================================================================== */
+const imGongForce = () => { const w = typeof window !== 'undefined' ? window.__im : null; return (w && w.force) || {}; };
+function imGongOn(S) { return !!S && S.track === 'voc' && S.nth === 1 && S.vocGoal === 'gong'; }
+function imGongSt(S) {
+  if (!S.gong) S.gong = { hk: { grade: 0, best: 0, tries: [], reg: {} }, com: { fil: false, sil: false, tries: [], prep: 0 }, gisa2: null, chu: null, ex: {}, ivPrep: 0, accepted: null };
+  IMG_ORDER.forEach((k) => { if (!S.gong.ex[k]) S.gong.ex[k] = { applied: false }; });
+  return S.gong;
+}
+function imGongPlan(S) { if (!S.plan) S.plan = { n: 0, good: 0, tries: 0, rush: 0 }; return S.plan; }
+const imGongHkOK = (S) => (imGongSt(S).hk.best || 0) >= 1 && imGongSt(S).hk.best <= IMG_HK_NEED;
+const imGongComOK = (S) => !!(imGongSt(S).com.fil && imGongSt(S).com.sil);
+const imGongCertOK = (S) => !!((S.cert && S.cert.pass) || (S.gong && S.gong.gisa2 && S.gong.gisa2.pass));
+function imGongReqs(S) {
+  const G = imGongSt(S), hk = G.hk.best;
+  return [
+    { id: 'cert', icon: '🏅', name: '기능사 1개 이상', ok: imGongCertOK(S), note: imGongCertOK(S) ? (S.cert && S.cert.pass ? `전자기능사 (의무검정 ${S.cert.pr}점)` : '전기기능사 (정기 검정 재도전)') : S.cert ? '의무검정 불합격 → 정기 검정 재도전' : '6월 의무검정 (실기)' },
+    { id: 'hk', icon: '📜', name: `한국사능력검정 ${IMG_HK_NEED}급 이상`, ok: imGongHkOK(S), note: hk ? `심화 ${hk}급` : G.hk.tries.length ? `불합격 ${G.hk.tries.length}회 · 다음 회차` : G.hk.reg.r1 ? '2월 심화 응시 예정' : '1월 접수 (2월 시험)' },
+    { id: 'com', icon: '💻', name: '컴퓨터활용능력 2급', ok: imGongComOK(S), note: imGongComOK(S) ? '필기 · 실기 합격' : G.com.fil ? '필기 ✓ · 실기 남음' : '필기 → 실기 (상시검정)' },
+  ];
+}
+const imGongMissing = (S) => imGongReqs(S).filter((r) => !r.ok).map((r) => r.name);
+function imGongBadges(S) { const R = imGongReqs(S); return R.map((r) => `${r.icon}${r.ok ? '✓' : '✗'}`).join(' '); }
+function imGongCheckHTML(E, title, sub) {
+  const S = E.G.S, G = imGongSt(S), esc = E.esc;
+  const rows = imGongReqs(S).map((r) => [`${r.icon} ${esc(r.name)}`, `<b style="color:${r.ok ? '#4FD69C' : '#FF8A7A'}">${r.ok ? '충족' : '미충족'}</b>`, `<small>${esc(r.note)}</small>`]);
+  const ex = IMG_ORDER.map((k) => { const X = IMG_EX[k], x = G.ex[k]; const st = x.final != null ? (x.final ? '최종 합격' : '최종 불합격') : x.pass1 != null && x.shown1 ? (x.pass1 ? '1차 합격' : '1차 불합격') : x.noreq ? '응시 불가' : x.absent ? '결시' : x.taken ? '발표 대기' : x.applied ? '원서 ✓' : X.chu && !(G.chu && G.chu.ok) ? (G.chu ? '추천 ✗' : '추천 필요') : k === 'gun' ? '4월 원서' : '7월 추천 후 원서'; return [`${X.icon} ${esc(X.short)}<br><small>${esc(X.date)} (예정·가상)</small>`, `<small>${esc(X.subs.map((s) => s[1]).join('·'))}</small>`, `<small>${esc(st)}</small>`]; });
+  return `<div class="eb">${esc(sub || '공무원(특성화고 전형) · 응시자격')}</div><h2 style="font-size:24px">${esc(title || '📋 응시자격 체크리스트')}</h2>${imTable(E, ['필수 요건', '상태', '비고'], rows)}${imTable(E, ['시험', '필기 과목', '상태'], ex)}<p class="small" style="margin:4px 0 0">세 요건 중 하나라도 없으면 그 시험엔 응시 불가 · 한능검은 게임 기준 ${IMG_HK_NEED}급 이상 · 지역인재·교육청은 학교장 추천 필요 · 날짜는 예정·가상</p>`;
+}
+function imGongHkGrade(sc100) { return sc100 >= 80 ? 1 : sc100 >= 70 ? 2 : sc100 >= 60 ? 3 : 0; }
+function imGongSkillInit(S) { if (S.sk.gong == null) { const st = S.startMi || 0; S.sk.gong = st >= IM_MI.SEP ? 46 : st >= IM_MI.JUL ? 40 : st >= IM_MI.MAR ? 30 : 22; } }
+function imGongSeed(S, k) { return imSeed(`${S.examNo}|gong|${k}`); }
+function imGongNextExam(S) { const G = imGongSt(S); return IMG_ORDER.find((k) => G.ex[k].applied && !G.ex[k].taken && !G.ex[k].noreq && !G.ex[k].absent && IMG_EX[k].mi >= S.mi) || null; }
+const IMG_DATES = { gun: [2027, 7, 7], edu: [2027, 8, 11], nat: [2027, 10, 20] };
+function imGongDday(E) {
+  const S = E.G.S, mi = S.mi;
+  if (mi >= IM_MI.LAST) return '졸업 · 첫 출근';
+  if (mi < IM_MI.JUN || (mi === IM_MI.JUN && !S.cert)) { const d = imVocDays(E, [2027, 5, 15]); return d > 0 ? `의무검정 D-${d}` : '의무검정 D-DAY'; }
+  const k = imGongNextExam(S); if (!k) return mi >= IM_MI.DEC ? '최종 발표' : `졸업 D-${imVocDays(E, [2028, 1, 10])}`;
+  const d = imVocDays(E, IMG_DATES[k]); return d > 0 ? `${IMG_EX[k].short} D-${d}` : `${IMG_EX[k].short} D-DAY`;
+}
+// 블록 넣기: 겹치는 부드러운 블록은 빼고, 필수 블록은 앞뒤로 줄인다 (40분 미만이면 뺀다)
+function imGongPut(E, L, nb) {
+  const s = E.T(nb.at), e = s + nb.len;
+  for (let i = L.length - 1; i >= 0; i--) {
+    const x = L[i], xs = E.T(x.at), xe = xs + x.len; if (xe <= s || xs >= e) continue;
+    if (x.must === false || x.kind === 'meal' || x.kind === 'coach' || x.kind === 'event' || x.kind === 'free') { L.splice(i, 1); continue; }
+    if (xs < s && s - 10 - xs >= 40) { x.len = s - 10 - xs; continue; }
+    if (xe > e && xe - (e + 20) >= 40) { x.at = E.hm(e + 20); x.len = xe - (e + 20); continue; }
+    L.splice(i, 1);
+  }
+  L.push(nb);
+}
+const imGongClone = (L) => L.map((x) => { const y = Object.assign({}, x); delete y.id; delete y.cls; delete y.s; delete y.e; return y; });
+
+/* =====================================================================
+   3. 일정 (공무원 목표) — 직업계고 기본 일정 위에 시험·발표·면접·추천을 얹는다
+      필기 결과는 시험 날 정해 두고, 발표 달에 공개한다(일정이 하루 중간에 바뀌지 않게)
+   ===================================================================== */
+function imGongSched(E, mi, base) {
+  const S = E.G.S, G = imGongSt(S), X = G.ex, L = imGongClone(base);
+  const bs = 'busstop', room = 'door:room', exam = (k, at) => imB(at, IMG_EX[k].min, 'gongexam', `${IMG_EX[k].short} 1차 필기 · ${IMG_EX[k].subs.map((s) => s[1]).join('·')}`, bs, { ex: k, lead: 30, grace: 15, sub: `${IMG_EX[k].venue} · ${IMG_EX[k].date} (예정·가상)` });
+  const res = (k, stage, at, loc) => imB(at, 15, 'gongres', `${IMG_EX[k].short} ${stage === '1' ? '1차' : '최종'} 합격자 발표`, loc, { ex: k, stage, grace: 120, sub: `${stage === '1' ? IMG_EX[k].res1 : IMG_EX[k].fin} 발표 (예정·가상)` });
+  const prep = (k, at) => imB(at, 35, 'gongprep', `면접 대비 · 모의면접 (${IMG_EX[k].short} 1차 합격 시)`, 'door:staff', { ex: k, grace: 30, sub: '교무실 · 담임 쌤 + 선배 영상 통화' });
+  const iv = (k, at) => imB(at, 60, 'gongiv', `${IMG_EX[k].short} 2차 면접`, bs, { ex: k, lead: 30, grace: 15, sub: `${IMG_EX[k].ivVenue} · ${IMG_EX[k].ivDate} (예정·가상)` });
+  const hkNeed = !imGongHkOK(S), comNeed = !imGongComOK(S);
+  const comSlot = (at) => (G.com.fil ? imB(at, 40, 'comsil', '컴활 2급 실기 (상시검정)', bs, { lead: 25, grace: 15, sub: '대한상공회의소 시험장 · 스프레드시트 40분' }) : imB(at, 60, 'comfil', '컴활 2급 필기 (상시검정)', bs, { lead: 25, grace: 15, sub: '대한상공회의소 시험장 · 컴퓨터 일반 · 스프레드시트 일반' }));
+  const hkSlot = (at, r) => imB(at, 80, 'hanguk', `한국사능력검정 심화 (${r === 'r1' ? '2월' : r === 'r2' ? '5월' : '8월'} 회차)`, bs, { round: r, lead: 30, grace: 15, sub: '○○중학교 시험장 · 50문항 80분 · 토요일 회차(게임은 그달 하루에)' });
+  const sat = (keep) => { const out = L.filter((x) => keep(x)); L.length = 0; L.push(...out); };
+  switch (mi) {
+    case IM_MI.JAN: if (comNeed) { imGongPut(E, L, comSlot('13:30')); } break;
+    case IM_MI.FEB:
+      if (hkNeed && G.hk.reg.r1) imGongPut(E, L, hkSlot('10:00', 'r1'));
+      if (comNeed && G.com.fil) imGongPut(E, L, comSlot('14:30'));
+      break;
+    case IM_MI.APR: if (comNeed) imGongPut(E, L, comSlot('15:30')); break;
+    case IM_MI.MAY: if (hkNeed && G.hk.reg.r2) imGongPut(E, L, hkSlot('16:30', 'r2')); break;
+    case IM_MI.JUL:
+      if (G.gisa2 && G.gisa2.want && G.gisa2.pass == null) imGongPut(E, L, imB('13:30', 130, 'gisa2', '전기기능사 정기 검정 · 실기 (재도전)', 'door:lab', { lead: 20, grace: 20, sub: '정기 기능사 실기 · 작업형 · 60점 이상 (예정·가상)' }));
+      if (!G.chu) { imGongPut(E, L, imB('16:40', 25, 'chucheon', '학교장 추천 대상자 상담', 'door:staff', { sub: '교무실 · 지역인재 · 교육청 추천 기준' })); imGongPut(E, L, imB('17:15', 30, 'principal', '교장실 면담 · 학교장 추천서', 'door:principal', { grace: 30, sub: '추천 대상자 · 교장 선생님' })); }
+      break;
+    case IM_MI.AUG:
+      if (X.gun.applied && !X.gun.taken) imGongPut(E, L, exam('gun', '10:00'));
+      if (hkNeed && G.hk.reg.r3) imGongPut(E, L, hkSlot('13:20', 'r3'));
+      if (comNeed) imGongPut(E, L, comSlot('14:50'));
+      break;
+    case IM_MI.SEP: // 토요일: 교육청 필기
+      sat((x) => x.kind === 'meal' && x.loc !== 'cafeteria');
+      L.push(imB('08:10', 30, 'meal', '아침 · 엄마표 토스트', 'living', { must: false }));
+      if (X.gun.taken) L.push(res('gun', '1', '09:00', room));
+      if (X.edu.applied && !X.edu.taken) L.push(exam('edu', '10:00'));
+      L.push(imB('12:10', 50, 'meal', '점심 · 분식', 'store', { must: false }));
+      if (X.gun.taken) L.push(prep('gun', '14:00'));
+      L.push(imB('15:00', 180, 'ebs', 'EBS실 토요 개방 (자율)', 'door:library', { must: false, sub: '토요일 자율 자습' }));
+      L.push(imB('18:30', 50, 'meal', '저녁 · 집밥', 'living', { must: false }));
+      break;
+    case IM_MI.OCT:
+      for (let i = L.length - 1; i >= 0; i--) if (L[i].kind === 'class' && L[i].at === '08:40') L.splice(i, 1);
+      imGongPut(E, L, imB('08:40', 200, 'naesin', '2학기 기말고사', 'door:class', { subs: ['kor', 'math', 'tam'], sub: '5등급제 · 공무원 준비생은 10월에 마지막 내신' }));
+      if (X.edu.taken) L.push(res('edu', '1', '12:40', 'door:class'));
+      if (X.gun.pass1) imGongPut(E, L, iv('gun', '16:20'));
+      if (X.edu.taken) imGongPut(E, L, prep('edu', '17:30'));
+      break;
+    case IM_MI.CSAT: // 토요일(수능 다음 주말): 지역인재 필기
+      sat((x) => false);
+      L.push(imB('08:10', 30, 'meal', '아침 · 엄마표 주먹밥', 'living', { must: false }));
+      if (X.nat.applied && !X.nat.taken) L.push(exam('nat', '10:00'));
+      L.push(imB('11:40', 50, 'meal', '점심 · 분식', 'store', { must: false }));
+      if (X.gun.ivDone) L.push(res('gun', 'f', '12:40', room));
+      if (X.edu.pass1) L.push(iv('edu', '14:30'));
+      L.push(imB('16:00', 140, 'ebs', 'EBS실 토요 개방 (자율)', 'door:library', { must: false }));
+      L.push(imB('18:30', 50, 'meal', '저녁 · 집밥', 'living', { must: false }));
+      break;
+    case IM_MI.DEC:
+      if (X.nat.taken) { L.push(prep('nat', '13:00')); if (X.nat.pass1) { L.push(iv('nat', '15:00')); L.push(res('nat', 'f', '21:00', room)); } }
+      break;
+    default: break;
+  }
+  return imFinish(E, L);
+}
+
+/* =====================================================================
+   4. voc 공통 — 아침 조회 스터디플래너 · 담임 자격증 지도 · 시험 전날 문자
+   ===================================================================== */
+function imVocYesterday(S) {
+  const L = (S.months || []).filter((x) => x.nth === S.nth && x.mi < S.mi);
+  const y = L[L.length - 1];
+  if (!y) return { first: true, plan: 360, study: 0, att: 0, tot: 0, minis: 0, ratio: 0.6 };
+  return { first: false, plan: y.plan || 360, study: y.study || 0, att: y.att || 0, tot: y.tot || 0, minis: y.minis || 0, ratio: E2clamp((y.study || 0) / Math.max(60, y.plan || 360)) - 0.1 * (y.miss || 0) };
+}
+const E2clamp = (v) => Math.max(0, Math.min(1, v));
+function imVocPlanner(E, s, late, done) {
+  const S = E.G.S, P = imGongPlan(S), fc = imGongForce(), Y = imVocYesterday(S), hr = imHR(E);
+  const sch = E.daySched().filter((x) => x.loc && x.kind !== 'arrive' && x.kind !== 'meal' && x.s > E.G.min).slice(0, 4);
+  const short = (x) => x.title.replace(/\s*\(.*?\)\s*/g, ' ').replace(/ · .*$/, '').trim();
+  const picks = sch.slice(0, 3);
+  const items = [{ q: Y.first ? '첫 플래너 검사! 어제 칸이 비어 있다…' : `어제 계획 ${(Y.plan / 60).toFixed(1)}h · 실제 ${(Y.study / 60).toFixed(1)}h. 빈칸이 보인다…`, opts: ['솔직하게 두고, 오늘 칸을 제대로 채우기', '빈칸 허겁지겁 채우기 (어제 한 척)'], ans: -1, time: 4.2 }];
+  picks.forEach((x) => { const right = short(x), wrong = E.shuffle(sch.filter((z) => z !== x).map(short).concat(['낮잠 (계획 없음)', '코인노래방', '폰 보기']).filter((t) => t !== right)).slice(0, 2); const op = E.shuffle([right].concat(wrong)); items.push({ q: `${E.hm(x.s)} 칸에 쓸 오늘 계획은?`, at: E.hm(x.s), opts: op, ans: op.indexOf(right), time: 4.2 }); });
+  const rushRoll = imSeed(`${S.examNo}|plan|${S.mi}`);
+  const mini = imMini(E, 'imPlannerMini', { label: `${imMonthLabel(S.mi)} · ${imName(S)}`, yest: Y, items, rushBot: fc.planner === 'rush',
+    judge: (mm) => {
+      const rush = mm.picks[0] === 1, right = items.slice(1).filter((it, k) => mm.oks[k + 1]).length, need = Math.max(1, items.length - 2);
+      const caught = rush && (fc.planner === 'rush' || rushRoll < 0.55);
+      let good = (!rush || !caught) && right >= need && (rush || Y.ratio >= 0.4);
+      if (fc.planner === 'good') good = true; if (fc.planner === 'rush') good = false;
+      const nm = imName(S) === '나' ? '' : imGiven(imName(S)) + ', ';
+      const line = good ? E.rnd([`${nm}어제 한 만큼 정직하게 적었네. 오늘 칸도 시간표랑 딱 맞아. 칭찬 도장!`, `계획이 시간표랑 맞으면 하루가 덜 흔들려. 잘하고 있어.`, `${nm}EBS실 출석이 차곡차곡. 이게 다 원서에 들어가는 성실이야.`])
+        : caught ? E.rnd(['빈칸은 빈칸대로 둬도 돼. 쌤은 어제보다 오늘 한 칸이 더 궁금해.', `${nm}허겁지겁 채운 건 다 티 나. 괜찮아, 오늘 저녁 EBS실 한 칸만 진짜로 채우자.`])
+          : E.rnd(['오늘 계획, 시간표 한 번만 더 보고 쓰자. 「오늘은 꼭!」', `${nm}어제는 좀 비었네. 괜찮아, 오늘은 꼭 — 쌤이 저녁에 EBS실 들를게.`]);
+      return { good, rush, caught, right, line };
+    },
+    onEnd: (sc, mm) => {
+      const R = mm.stampRes || { good: false };
+      P.n++; if (R.good) P.good++; else P.tries++; if (R.rush) P.rush++;
+      if (R.good) { imApply(E, { mental: 3 }, '플래너 칭찬 도장', true); if (P.good === 1) imAlbum(E, '👍', '스터디플래너 첫 칭찬 도장'); }
+      else imApply(E, { mental: R.caught ? -1 : 1 }, '「오늘은 꼭!」', true);
+      S.flags.planLast = R.good ? 'good' : R.caught ? 'rush' : 'try';
+      E.toast(R.good ? `👍 칭찬 도장 · 성실도 ${P.good}/${P.n}` : `「오늘은 꼭!」 · 성실도 ${P.good}/${P.n}`, R.good ? 'ok' : '');
+    } }, () => null);
+  if (!mini) return done();
+  E.runMinis([mini], done);
+}
+function imVocCoachTopic(E) {
+  const S = E.G.S, mi = S.mi, goal = S.vocGoal;
+  if (mi === IM_MI.START || mi === IM_MI.MAY || !S.cert) return 'gisa';
+  if (goal === 'gong') { if (!imGongHkOK(S)) return 'hk'; if (!imGongComOK(S)) return 'com'; return 'gong'; }
+  return goal === 'job' ? 'job' : goal === 'dongil' ? 'dongil' : 'jiktam';
+}
+function imVocAddCoach(E, mi, L) { // imVocSched 끝에서 호출 (학기 중 일부 달)
+  const S = E.G.S;
+  if (!IMG_COACH_MI[mi] || IMC_VAC[mi]) return;
+  if (mi === IM_MI.SEP && S.vocGoal === 'dongil' && !(S.dongil && (S.dongil.applied || S.dongil.missed))) return;
+  L.forEach((x) => { const xs = E.T(x.at); if ((x.kind === 'prac' || x.kind === 'suhaeng') && xs < E.T('15:50') && xs + x.len > E.T('15:40')) x.len = E.T('15:40') - xs; if (x.kind === 'event' && /원서 접수 확인/.test(x.title)) x.at = '12:55'; if (x.kind === 'meal' && x.at === '17:10') { x.at = '17:35'; x.len = 25; } });
+  const t = imVocCoachTopic(E), T = IMG_COACH[t];
+  L.push(imB('15:50', 100, 'coach', `담임 쌤 자격증 지도 · ${T.title}`, T.loc, { must: false, lead: 20, grace: 40, topic: t, sub: `방과후 · ${T.loc === 'door:lab' ? '실습실' : '교실'} · 김선영 쌤` }));
+}
+function imVocCoachAt(E, s) {
+  const S = E.G.S, t = s.topic || imVocCoachTopic(E), T = IMG_COACH[t] || IMG_COACH.gisa, hr = imHR(E), nm = imName(S) === '나' ? '' : imGiven(imName(S)) + ', ';
+  const snack = imSeed(`${S.examNo}|snack|${S.mi}`) < 0.5;
+  const mini = imMini(E, 'imCoachMini', { topic: T, snack, place: T.loc === 'door:lab' ? '실습실' : '교실', onEnd: (sc) => {
+    const G = S.gong ? S.gong : null;
+    let tx = '';
+    if (T.skill === 'com') { const st = imGongSt(S); st.com.prep = Math.min(30, (st.com.prep || 0) + 6 + 8 * sc); tx = `컴활 실력 +${Math.round(6 + 8 * sc)}`; }
+    else if (T.skill === 'saeng') { const n = imSaeng(E, 2 + 2 * sc, '실습 기록 · 전공 탐구 정리 (담임 지도)'); tx = `생기부 +${n.toFixed(1)}`; }
+    else { const n = imGain(E, T.skill, 3 + 5 * sc); tx = `${T.skill === 'gong' ? '공무원 전공' : imSkLabel(T.skill)} +${n.toFixed(1)}`; if (T.skill === 'hist' && G) G.hk.prep = Math.min(30, (G.hk.prep || 0) + 5 + 6 * sc); if (t === 'gong' && G) G.ivPrep = Math.min(1, (G.ivPrep || 0) + 0.12 + 0.12 * sc); }
+    imStudied(E, s.e - s.s, sc); imMental(E, 2);
+    E.toast(`담임 지도 ${Math.round(sc * 100)}% · ${tx}`, sc > 0.6 ? 'ok' : '');
+  } }, () => null);
+  const after = [];
+  if (snack) after.push({ who: hr, text: E.rnd(['(편의점 봉지를 내밀며) 바나나우유 하나씩. 당 떨어지면 회로도 안 보여.', '쌤이 오는 길에 삼각김밥 샀다. 먹고 EBS실 가.']) });
+  after.push({ who: hr, text: E.rnd([`${nm}쌤도 퇴근 좀 늦게 해도 괜찮아. 너희 붙는 게 쌤 월급날보다 좋아.`, '오늘 틀린 거 세 개만 내일 아침 플래너에 적어 와.', `${nm}처음엔 다 어려워. 쌤도 그랬어. 한 칸씩 가자.`]) });
+  if (!mini) return E.say(after, () => imSlotDone(E, s));
+  E.runMinis([E.cardMini(`담임 쌤 자격증 지도 · ${T.icon}`, `${T.title} · 방과후 15:50~17:30`, 'class', 'coach', 3), mini], () => {
+    if (snack) { imApply(E, { hp: 8 }, '담임 쌤 간식', true); imAlbum(E, '🍌', '담임 쌤이 사 온 바나나우유'); }
+    E.say(after, () => imSlotDone(E, s));
+  });
+}
+function imGongHrText(E) { // 시험 전날 밤 담임 문자 (voc 공통)
+  const S = E.G.S, mi = S.mi, G = S.gong;
+  let what = null;
+  if (mi === IM_MI.MAY) what = '내일 전자기능사 의무검정';
+  else if (imGongOn(S)) { const nx = IMG_ORDER.find((k) => IMG_EX[k].mi === mi + 1 && G && G.ex[k].applied && !G.ex[k].taken); if (nx) what = `내일 ${IMG_EX[nx].short} 필기`; }
+  if (!what) return;
+  const v = imVoc(S);
+  E.runMinis([E.phoneMini('김선영 쌤', [[1.5, 'c', `${v}, ${what}지? 아는 것만 다 맞히면 돼.`], [4.2, 'c', '신분증 · 수험표 · 컴퓨터용 사인펜 가방에 넣고, 오늘은 일찍 자.'], [7, 'm', '네 쌤!! 감사합니다.'], [9.2, 'c', '쌤이 내일 아침에 기도할게. 잘 자 🌙']], { end: 12 })], () => { imApply(E, { mental: 8 }, '담임 쌤 문자', true); imAlbum(E, '📱', `시험 전날 담임 쌤 문자 — ${what}`); });
+}
+
+/* =====================================================================
+   5. 공무원 루트 — 자격 시험 (한능검 · 컴활 · 기능사 재도전)
+   ===================================================================== */
+function imGongRegCrisis(E) {
+  const S = E.G.S, G = imGongSt(S);
+  if (!imGongOn(S) || G.hk.reg.r1 || !E.pendingQuests().some((q) => q.id === 'q-hk')) return;
+  E.runMinis([imLateNote(E, { kicker: '17:20 · 휴대폰 알림', icon: '⏰', title: '한능검 접수 오늘 18:00 마감!', lines: ['「제8x회 한국사능력검정시험 원서 접수 — 경기 지역 오늘 18:00 마감」 (예정·가상)', '…아 맞다. 컴활 필기 끝나고 깜빡했다.', '지역별 접수일이 달라서 하루만 늦어도 다음 회차(5월)로 밀린다.'], bg: 'bedroom', color: IMC_COL.hot, sfx: 'ring', shake: 0.4, sec: 4.2 })], () => E.say([{ who: '나', text: '집으로! 내 방 노트북에서 바로 접수하자.' }]));
+}
+function imGongHkQuest(E, q) {
+  const S = E.G.S, G = imGongSt(S);
+  E.runMinis([imLateNote(E, { kicker: '국사편찬위원회 · 한국사능력검정시험 원서 접수', icon: '📜', title: '접수 완료 — 2월 심화 (1~3급)', lines: ['시험장: ○○중학교 · 2/6(토) 10:00 (예정·가상)', `게임 기준 응시자격: 심화 ${IMG_HK_NEED}급 이상 (60점↑)`, '수험표는 시험 1주 전 출력.'], bg: 'bedroom', color: IMC_COL.act, stamp: '접수 완료', sec: 3.6 })], () => { G.hk.reg.r1 = true; E.completeQuest(q.id); imAlbum(E, '🧾', '한능검 접수 완료 캡처 (마감 40분 전)'); imMental(E, 3); });
+}
+function imGongHanguk(E, s) {
+  const S = E.G.S, G = imGongSt(S), fc = imGongForce();
+  if (imGongHkOK(S)) { imSlotDone(E, s); return; }
+  const qs = imPickQs(E, ['hk', 'hist'], 8, { reask: 1, hard: true });
+  const mini = imQuiz(E, { qs, title: '한국사능력검정 · 심화', subject: '한국사', sub: '50문항 80분 → 게임 8문항', time: 8, count: 8, track: 'voc', bg: 'exam', onEnd: (sc, m) => {
+    imNoteWrong(E, m);
+    let v = Math.round(100 * E.clamp(0.55 * sc + 0.3 * (S.sk.hist || 40) / 100 + 0.15 * Math.min(1, (G.hk.prep || 0) / 20) + (imGongSeed(S, 'hk' + s.round) - 0.5) * 0.08, 0, 1));
+    if (fc.hanguk === 'pass') v = Math.max(v, 74); if (fc.hanguk === 'fail') v = Math.min(v, 52);
+    const gr = imGongHkGrade(v);
+    G.hk.tries.push({ round: s.round, score: v, grade: gr, mi: S.mi });
+    if (gr && (!G.hk.best || gr < G.hk.best)) G.hk.best = gr;
+    imGain(E, 'hist', 2 + 3 * sc);
+  } });
+  if (mini) mini.cfg = { room: '○○중학교 · 한국사능력검정시험 고사실', board: '한국사능력검정 심화', sub: '50문항 · 80분 · 80↑1급 70↑2급 60↑3급' };
+  E.runMinis([E.cardMini('한국사능력검정시험 · 심화', `○○중학교 · ${s.round === 'r1' ? '2/6(토)' : s.round === 'r2' ? '5/22(토)' : '8/8(일)'} 10:00 (예정·가상)`, 'urgent', 'exam', 3), mini], () => {
+    imSlotDone(E, s);
+    const t = G.hk.tries[G.hk.tries.length - 1] || { score: 0, grade: 0 }, ok = t.grade && t.grade <= IMG_HK_NEED;
+    if (ok) { imAlbum(E, '📜', `한국사능력검정 심화 ${t.grade}급`); imMental(E, 10); } else imMental(E, -8);
+    if (!ok) { if (s.round === 'r1') G.hk.reg.r2 = true; else if (s.round === 'r2') G.hk.reg.r3 = true; }
+    imCard(E, `<div class="eb">한국사능력검정시험 · 심화 · 국사편찬위원회</div><h2 style="font-size:26px">${ok ? `📜 ${t.grade}급 인증!` : '불합격'}</h2>${imTable(E, ['항목', '결과'], [['점수', `<b>${t.score}</b> / 100`], ['급수', t.grade ? `심화 ${t.grade}급` : '급수 없음 (60점 미만)'], ['게임 응시자격', ok ? '<b style="color:#4FD69C">충족</b>' : `<b style="color:#FF8A7A">미충족 (${IMG_HK_NEED}급 이상)</b>`]])}<div class="brief"><div>${ok ? '유효기간 없는 급수 — 공무원 원서 응시자격 한 줄이 채워졌다.' : s.round === 'r3' ? '마지막 회차였다. 한국사는 졸업 뒤에도 다시 볼 수 있다.' : `다음 회차(${s.round === 'r1' ? '5월' : '8월'})는 담임 쌤이 접수를 챙겨 주셨다.`}</div><div style="font-size:11.5px">심화 80점↑ 1급 · 70↑ 2급 · 60↑ 3급 · 발표는 약 2주 뒤 — 게임은 바로 공개</div></div>`);
+  });
+}
+function imGongComExam(E, s) {
+  const S = E.G.S, G = imGongSt(S), fc = imGongForce(), fil = s.kind === 'comfil';
+  if (imGongComOK(S) || (!fil && !G.com.fil)) { if (!fil && !G.com.fil) E.say([{ who: '나', text: '필기 합격 전이라 실기는 접수가 안 된다.' }]); imSlotDone(E, s); return; }
+  let mini;
+  const fin = (sc, m) => {
+    if (fil) imNoteWrong(E, m);
+    const base = fil ? 0.6 * sc + 0.25 * Math.min(1, (G.com.prep || 0) / 18 + 0.35) + 0.15 : 0.62 * sc + 0.38 * Math.min(1, (G.com.prep || 0) / 16 + 0.45);
+    let v = Math.round(100 * E.clamp(base + (imGongSeed(S, 'com' + S.mi + s.kind) - 0.5) * 0.08, 0, 1));
+    if (fc.comhwal === 'pass') v = Math.max(v, fil ? 72 : 78); if (fc.comhwal === 'fail') v = Math.min(v, fil ? 52 : 60);
+    const pass = fil ? v >= 60 : v >= 70;
+    G.com.tries.push({ kind: fil ? '필기' : '실기', score: v, pass, mi: S.mi });
+    if (pass) { if (fil) G.com.fil = true; else G.com.sil = true; }
+    G.com.prep = Math.min(30, (G.com.prep || 0) + 3);
+  };
+  if (fil) { const qs = imPickQs(E, ['comp'], 8, { reask: 1, hard: true }); mini = imQuiz(E, { qs, title: '컴활 2급 필기 · CBT', subject: '컴활', sub: '컴퓨터 일반 20 + 스프레드시트 일반 20 → 게임 8문항', time: 8, count: 8, track: 'voc', bg: 'exam', onEnd: fin }); if (mini) mini.cfg = { room: '대한상공회의소 상시검정 · CBT', board: '컴퓨터활용능력 2급 필기', sub: '과목 40점↑ · 평균 60점↑ 합격' }; }
+  else mini = imMini(E, 'imComSilMini', { onEnd: fin }, () => null);
+  E.runMinis([E.cardMini(`컴퓨터활용능력 2급 ${fil ? '필기' : '실기'}`, `대한상공회의소 상시검정 · ${fil ? '40문항 40분' : '스프레드시트 40분 · 70점↑'}`, 'urgent', 'exam', 3), mini].filter(Boolean), () => {
+    imSlotDone(E, s);
+    const t = G.com.tries[G.com.tries.length - 1] || { score: 0, pass: false };
+    if (t.pass) { imMental(E, 8); imAlbum(E, '💻', fil ? '컴활 2급 필기 합격 (CBT 바로 발표)' : '컴퓨터활용능력 2급 최종 합격'); } else imMental(E, -6);
+    imCard(E, `<div class="eb">컴퓨터활용능력 2급 · ${fil ? '필기 (CBT)' : '실기 (스프레드시트)'} · 대한상공회의소</div><h2 style="font-size:26px">${t.pass ? (fil ? '필기 합격!' : '💻 컴활 2급 합격!') : '불합격'}</h2>${imTable(E, ['항목', '결과'], [['점수', `<b>${t.score}</b> / 100`], ['합격 기준', fil ? '과목 40점↑ · 평균 60점↑' : '70점↑']])}<div class="brief"><div>${t.pass ? (fil ? '필기 합격 — 2년 안에 실기. 다음 회차 실기 접수!' : '응시자격 한 줄 완성. 엑셀은 어디서든 쓴다.') : '상시검정이라 다음 달 다시 볼 수 있다. 담임 쌤 함수 지도 때 같이 보자.'}</div></div>`);
+  });
+}
+function imGongGisa2(E, s) {
+  const S = E.G.S, G = imGongSt(S), fc = imGongForce(); let sc = 0.5, mm = null;
+  const pm = imMini(E, 'imGisaPracMini', { title: '전기기능사 정기 검정 · 실기', onEnd: (v, m) => { sc = v; mm = m; } }, () => imLaneFallback(E, '실기 · 납땜', (v) => { sc = v; }));
+  E.runMinis([E.cardMini('정기 기능사 검정 · 실기 (재도전)', '작업형 · 100점 만점 60점 이상 · 의무검정 다음 회차 (예정·가상)', 'urgent', 'workshop', 4), pm], () => {
+    imSlotDone(E, s);
+    let pr = Math.round(E.clamp(100 * (0.62 * sc + 0.38 * (S.sk.jeon || 40) / 100) + 4, 0, 100));
+    if (fc.gisa === 'retry' || fc.gisa === 'pass') pr = Math.max(pr, 70); if (fc.gisa === 'fail') pr = Math.min(pr, 50);
+    G.gisa2.pass = pr >= 60; G.gisa2.pr = pr;
+    if (G.gisa2.pass) { imAlbum(E, '🏅', '정기 검정 재도전 — 기능사 합격'); imMental(E, 15); } else { imAlbum(E, '🔧', '정기 검정도 아쉽게…'); imMental(E, -10); }
+    imCard(E, `<div class="eb">7월 · 정기 기능사 검정 · 실기 (작업형)</div><h2 style="font-size:28px">${G.gisa2.pass ? '🏅 합격!' : '불합격'}</h2>${imTable(E, ['항목', '결과'], [['실기 점수', `<b>${pr}</b> / 100`], ['공무원 응시자격 · 기능사', G.gisa2.pass ? '<b style="color:#4FD69C">충족</b>' : '<b style="color:#FF8A7A">미충족</b>']])}<div class="brief"><div>${G.gisa2.pass ? '한 번 넘어진 실기, 두 번째에 넘었다. 응시자격 첫 줄 완성.' : '올해 공무원 시험은 응시자격이 막혔다. 담임 쌤과 다른 길(취업 · 동일계 · 수능)도 함께 볼 수 있다 — 8월 상담에서.'}</div><div style="font-size:11.5px">(추정) 의무검정 불합격 → 같은 해 정기 기능사 실기 회차 재도전 · 게임은 7월 하루로</div></div>`);
+  });
+}
+
+/* =====================================================================
+   6. 학교장 추천 — 담임 상담 → 선발 기준 → 교장실 면담 → 추천서 발급 (7월)
+   ===================================================================== */
+function imGongChuCriteria(S) {
+  const ns = imNaesinAvg(S), P = imGongPlan(S), tardy = (S.flags.tardy || 0) + (S.flags.vocMiss || 0), sinc = P.n ? P.good / P.n : 0.6;
+  const rows = [
+    { k: '학과 성적 상위 30%', ok: ns <= 2.5, v: `내신 ${ns.toFixed(2)} (게임 환산 2.50 이내)` },
+    { k: '출결', ok: tardy <= 3, v: `지각·결과 ${tardy}회 (3회 이내)` },
+    { k: '성실도 (플래너 도장)', ok: sinc >= 0.4, v: P.n ? `칭찬 도장 ${P.good}/${P.n}` : '기록 적음 · 담임 의견' },
+    { k: '자격증', ok: imGongCertOK(S), v: imGongCertOK(S) ? '기능사 ✓' : '기능사 없음' },
+  ];
+  return { rows, pts: rows.filter((r) => r.ok).length };
+}
+function imGongChucheon(E, s) {
+  const S = E.G.S, G = imGongSt(S), fc = imGongForce(), hr = imHR(E), nm = imName(S) === '나' ? '' : imName(S) + ', ', esc = E.esc;
+  const C = imGongChuCriteria(S);
+  let ok = C.pts >= 3; if (fc.chucheon === 'yes') ok = true; if (fc.chucheon === 'no') ok = false;
+  G.chu = { ok, pts: C.pts, rows: C.rows.map((r) => ({ k: r.k, ok: r.ok, v: r.v })) };
+  E.say([{ who: hr, text: `${nm}앉아 봐. 학교장 추천 이야기야. 국가직 지역인재 9급이랑 경기도교육청 기술계고 경력경쟁 — 둘 다 학교장 추천이 있어야 원서를 낼 수 있어.` }, { who: hr, text: '학교마다 추천 인원이 정해져 있어서, 추천위원회에서 기준대로 대상자를 정해. 성적, 출결, 자격증, 그리고 성실도.' }], () => imCard(E, `<div class="eb">7월 · 학교장 추천 대상자 선발 (추천위원회)</div><h2 style="font-size:23px">${ok ? '추천 대상자 선정' : '이번엔 추천 대상 밖'}</h2>${imTable(E, ['기준', '충족', '내 기록'], C.rows.map((r) => [esc(r.k), r.ok ? '<b style="color:#4FD69C">✓</b>' : '<b style="color:#FF8A7A">✗</b>', `<small>${esc(r.v)}</small>`]))}<div class="brief"><div>${ok ? `4개 중 ${C.pts}개 충족 — 17:15 교장실 면담 뒤 추천서가 나간다.` : '추천 인원 안에 들지 못했다. 군무원은 추천 없이 응시할 수 있다.'}</div><div style="font-size:11.5px">실제: 지역인재 9급 = 학과 성적 상위 30% 이내 · 학교별 추천 인원 제한 (research §9) · 게임 기준은 4개 중 3개</div></div>`, () => {
+    imSlotDone(E, s);
+    if (ok) { imMental(E, 6); E.say([{ who: hr, text: '좋아. 교장 선생님이 직접 한 명씩 보고 싶어 하셔. 떨지 말고, 실습실 얘기 하면 돼.' }]); }
+    else { imMental(E, -8); E.say([{ who: hr, text: `${nm}속상하지? 쌤도 속상해. 그래도 군무원이 남았고, 내년 기회도 있어. 같이 가자.` }]); }
+  }));
+}
+function imGongPrincipal(E, s) {
+  const S = E.G.S, G = imGongSt(S), P = IMG_PRINCIPAL, hr = imHR(E), v = imVoc(S), done = () => { if (s) imSlotDone(E, s); };
+  const ok = G.chu && G.chu.ok;
+  if (!ok) {
+    return E.runMinis([E.cardMini('교장실 앞 복도', '「교장실」 명패 · 추천 면담 대기 의자', null, 'principal', 4)], () => E.say([{ who: P.short, text: `(문을 열고 나오시며) 학생, AI전자과지? 실습실 불 제일 늦게 끄는 반이라고 들었어요.` }, { who: P.short, text: '추천은 숫자로 정해지지만, 학생 이름은 내가 기억할게요. 군무원 시험 잘 봐요.' }, { who: '나', text: '(꾸벅) …감사합니다.' }], () => { imApply(E, { mental: 5 }, '교장 선생님의 한마디'); done(); }));
+  }
+  const ask1 = imLateAsk(E, { title: '왜 공무원이 되고 싶나요?', kicker: `교장실 · ${P.name}`, icon: '🏛️', bg: 'principal', cfg: { talk: true }, lines: ['소파 맞은편, 교장 선생님이 내 생기부를 덮고 물으셨다.', '「점수 말고, 학생 이야기를 듣고 싶어요.」'], opts: [{ label: '실습실에서 고친 것이 누군가를 안전하게 하는 게 좋았어요', sub: '경험 + 공익' }, { label: '안정적이라서요', sub: '솔직' }, { label: '…잘 모르겠어요', sub: '긴장' }], bot: 0, def: 1, time: 14, color: IMC_COL.info, style: 'office' });
+  const ask2 = imLateAsk(E, { title: '상사가 안전 절차를 건너뛰라고 하면?', kicker: `교장실 · ${P.name}`, icon: '⚡', bg: 'principal', cfg: { talk: true }, lines: ['「현장에선 그런 순간이 와요. 학생이라면?」'], opts: [{ label: '정중히 절차를 말씀드리고 차단 후 작업하겠습니다', sub: '안전 · 원칙' }, { label: '시키는 대로 빨리 하겠습니다', sub: '복종' }, { label: '몰래 혼자 고치겠습니다', sub: '위험' }], bot: 0, def: 1, time: 14, color: IMC_COL.info, style: 'office' });
+  const picks = [];
+  if (ask1) ask1.cfg = Object.assign({}, ask1.cfg, {});
+  E.runMinis([E.cardMini('교장실 · 학교장 추천 면담', `${P.name} · 추천 대상자 면담 (7월 · 예정·가상)`, 'office', 'principal', 4), ask1, ask2].filter(Boolean), () => {
+    const stamp = imLateNote(E, { kicker: '2027.07.16 · 한국과학기술고등학교장 (가상 날짜)', icon: '📜', title: '학교장 추천서 발급', lines: [`추천 대상: ${imName(S) === '나' ? '본인' : imName(S)} (3학년 AI전자과)`, '추천 전형: 국가직 지역인재 9급(전기) · 경기도교육청 기술계고 경력경쟁(일반전기 9급)', '「위 학생은 성실하고 현장 기술을 갖추었기에 추천합니다.」'], bg: 'principal', cfg: { talk: false }, color: IMC_COL.act, stamp: '학교장 직인', stampCol: '#C62828', sfx: 'stamp', sec: 4.4 });
+    E.runMinis([stamp], () => {
+      G.ex.edu.applied = true; G.ex.nat.applied = true; G.chu.issued = true;
+      imAlbum(E, '📜', '학교장 추천서 — 직인 쾅'); imMental(E, 12);
+      E.say([{ who: P.short, text: `${imName(S) === '나' ? '학생' : imGiven(imName(S)) + ' 학생'}, 이 도장은 학교가 학생을 믿는다는 뜻이에요. 합격하면 첫 월급 날 실습실 후배들 간식 한 번 사 줘요.` }, { who: hr, text: `${v}, 원서는 쌤이랑 같이 접수하자. 교육청은 8월 말, 지역인재는 7월 말 (예정·가상).` }, { who: '나', text: '(추천서 봉투가 이렇게 무거운 줄 몰랐다.)' }], done);
+    });
+  });
+}
+
+/* =====================================================================
+   7. 공무원 시험 — 1차 필기 · 발표 · 면접 대비 · 2차 면접 · 최종
+   ===================================================================== */
+function imGongForcePass(k, stage) { const f = imGongForce().gong; if (!f) return null; if (stage === '1') return f === 'all' || f === 'fail2' ? true : f === 'fail1' ? false : f === k; return f === 'fail2' ? false : f === 'all' || f === k ? true : null; }
+function imGongJudge1(E, k, scores) {
+  const S = E.G.S, X = IMG_EX[k], vals = Object.values(scores), avg = Math.round(vals.reduce((a, z) => a + z, 0) / Math.max(1, vals.length) * 10) / 10;
+  let pass = avg >= X.cut && Math.min(...vals) >= 40;
+  const f = imGongForcePass(k, '1'); if (f != null) pass = f;
+  return { avg, pass };
+}
+function imGongExam(E, s) {
+  const S = E.G.S, G = imGongSt(S), k = s.ex, X = IMG_EX[k], x = G.ex[k], esc = E.esc;
+  const miss = imGongMissing(S), chuMiss = X.chu && !(G.chu && G.chu.ok);
+  if (miss.length || chuMiss) {
+    x.noreq = miss.concat(chuMiss ? ['학교장 추천'] : []); x.taken = false;
+    imMental(E, -10); imAlbum(E, '🚫', `${X.short} — 응시자격 미충족`);
+    return imCard(E, `<div class="eb">${esc(X.date)} · ${esc(X.name)} · 시험장 입구 응시자격 확인</div><h2 style="font-size:25px">🚫 응시 불가</h2>${imTable(E, ['미충족 요건', ''], x.noreq.map((r) => [esc(r), '<b style="color:#FF8A7A">✗</b>']))}<div class="brief"><div>원서 단계에서 걸렸다 — 응시자격 기준일까지 요건을 채워야 시험을 볼 수 있다.</div><div>${miss.length ? '남은 시험 전에 채울 수 있는 건 채우자.' : ''}</div></div>`, () => imSlotDone(E, s));
+  }
+  const scores = {}, minis = [E.cardMini(`${X.name} · 1차 필기`, `${X.venue} · ${X.date} 10:00 · ${X.subs.map((y) => y[1]).join(' · ')} (예정·가상)`, 'urgent', 'exam', 3)];
+  X.subs.forEach(([pool, nm, sk]) => {
+    const qs = imPickQs(E, pool === 'kor' || pool === 'eng' ? imPool(pool) : [pool], 5, { reask: 1, hard: S.mi >= IM_MI.SEP });
+    const mini = imQuiz(E, { qs, title: `${X.short} 1차 · ${nm}`, subject: nm, sub: `${nm} · 문항당 8초`, time: 8, count: 5, track: 'voc', bg: 'exam', onEnd: (sc, m) => {
+      imNoteWrong(E, m);
+      const skv = (S.sk[sk] != null ? S.sk[sk] : 40) / 100;
+      scores[nm] = Math.round(100 * E.clamp(0.5 * sc + 0.45 * skv + 0.1 * (imCond(S) - 0.5) + (imGongSeed(S, k + nm) - 0.5) * 0.1, 0, 1));
+      imGain(E, sk, 1 + 2 * sc);
+    } });
+    if (mini) mini.cfg = { room: X.room, board: `${nm}`, sub: `${X.short} 1차 필기 · 4지선다 → 게임 3지 5문항` };
+    minis.push(mini);
+  });
+  E.statAdd('hp', -8);
+  E.runMinis(minis.filter(Boolean), () => {
+    imSlotDone(E, s);
+    const J = imGongJudge1(E, k, scores);
+    Object.assign(x, { taken: true, scores, avg: J.avg, pass1: J.pass, shown1: false });
+    imAlbum(E, X.icon, `${X.short} 1차 필기 — 수험표와 컴퓨터용 사인펜`); imMental(E, 4);
+    imCard(E, `<div class="eb">${esc(X.date)} · ${esc(X.name)} · 1차 필기 끝</div><h2 style="font-size:24px">답안지 제출</h2>${imTable(E, ['과목', '가채점'], Object.keys(scores).map((n) => [esc(n), `${scores[n]}점`]))}<div class="brief"><div>가채점 평균 <b>${J.avg}</b> · 작년 합격선은 ${X.cut}점 안팎 (가상)</div><div>1차 발표 ${esc(X.res1)} (예정·가상) — 그때까지 다음 시험 준비!</div></div>`);
+  });
+}
+function imGongReveal(E, s, after) {
+  const S = E.G.S, G = imGongSt(S), k = s.ex, X = IMG_EX[k], x = G.ex[k], esc = E.esc, done = () => { if (s.e != null) imSlotDone(E, s); if (after) after(); };
+  if (s.stage === '1') {
+    if (x.shown1) return done();
+    x.shown1 = true;
+    const m = imMini(E, 'imRefreshMini', { pass: x.pass1, result: x.pass1 ? 'pass' : 'fail', label: `${X.short} 1차 합격`, univ: X.org, site: X.site, name: S.name || '', no: S.examNo || '', failText: '1차 불합격', onEnd: () => {} }, () => E.cardMini(x.pass1 ? '1차 합격' : '1차 불합격', X.short, null, 'result', 4));
+    return E.runMinis([E.cardMini(`${X.short} 1차 합격자 발표`, `${X.site} · ${X.res1} (예정·가상)`, 'urgent', 'result', 3), m], () => {
+      if (x.pass1) { imAlbum(E, '🎉', `${X.short} 1차(필기) 합격 화면`); imMental(E, 15); } else imMental(E, -10);
+      imCard(E, `<div class="eb">${esc(X.res1)} · ${esc(X.name)} · 1차 발표</div><h2 style="font-size:25px">${x.pass1 ? '1차 합격!' : '1차 불합격'}</h2>${imTable(E, ['과목', '점수'], Object.keys(x.scores || {}).map((n) => [esc(n), `${x.scores[n]}점`]).concat([['평균', `<b>${x.avg}</b> (합격선 ${X.cut} · 가상)`]]))}<div class="brief"><div>${x.pass1 ? `2차 면접 ${esc(X.ivDate)} (예정·가상). 면접 대비 — 교무실 모의면접부터.` : '이번엔 합격선 아래. 다음 시험이 남아 있다 — 기출 회독 노트는 그대로.'}</div></div>`, done);
+    });
+  }
+  // 최종
+  if (x.shownF) return done();
+  x.shownF = true;
+  const m = imMini(E, 'imRefreshMini', { pass: !!x.final, result: x.final ? 'pass' : 'fail', label: `${X.short} 최종 합격`, univ: X.org, site: X.site, name: S.name || '', no: S.examNo || '', failText: '최종 불합격', onEnd: () => {} }, () => E.cardMini(x.final ? '최종 합격' : '최종 불합격', X.short, null, 'result', 4));
+  E.runMinis([E.cardMini(`${X.short} 최종 합격자 발표`, `${X.site} · ${X.fin} (예정·가상)`, 'urgent', 'result', 3), m], () => {
+    if (x.final) { imAlbum(E, '🏛️', `${X.short} 최종 합격 화면 캡처`); imMental(E, 25); } else imMental(E, -12);
+    const call = x.final ? [E.phoneMini('엄마', [[1.5, 'm', `엄마… 나 ${X.short} 최종 합격했어.`], [4, 'c', `…${imVoc(S)}? 진짜? 진짜 공무원?`], [6.6, 'c', '아이고… 엄마가 냉장고에 붙인 그 종이, 오늘 떼도 되겠다.'], [9.2, 'm', '아니, 그냥 붙여 둬. 기념으로.']], { end: 12 })] : [];
+    imCard(E, `<div class="eb">${esc(X.fin)} · ${esc(X.name)} · 최종 발표</div><h2 style="font-size:25px">${x.final ? '🏛️ 최종 합격!' : '최종 불합격'}</h2>${imTable(E, ['단계', '결과'], [['1차 필기', `평균 ${x.avg}`], ['면접 대비', x.prep != null ? `모의면접 ${Math.round(x.prep * 100)}%` : '-'], ['2차 면접', x.ivSc != null ? `${Math.round(x.ivSc * 100)}%` : '결시']])}<div class="brief"><div>${x.final ? (k === 'nat' ? '지역인재 9급은 6개월 수습 뒤 정식 9급 임용 (research §9).' : '임용 대기 — 발령 연락을 기다린다.') : '면접 문 앞에서 이번엔 멈췄다. 1차 합격선을 넘은 실력은 그대로다.'}</div></div>`, () => (call.length ? E.runMinis(call, done) : done()));
+  });
+}
+function imGongPrep(E, s) {
+  const S = E.G.S, G = imGongSt(S), k = s.ex, X = IMG_EX[k], x = G.ex[k], hr = imHR(E), nm = imName(S) === '나' ? '' : imName(S) + ', ';
+  if (!x.pass1) {
+    return E.say([{ who: hr, text: `${nm}${X.short}은 이번엔 아쉬웠지. 오늘 모의면접 대신 다음 시험 기출 같이 보자.` }, { who: hr, text: '떨어진 시험지에서 틀린 것만 고르면, 그게 다음 시험 합격선이야.' }], () => { const n = imGain(E, 'gong', 3); imApply(E, { mental: 4 }, `담임 쌤과 오답 정리 · 전공 +${n.toFixed(1)}`); imSlotDone(E, s); });
+  }
+  const qs = [Object.assign({}, X.iv0)].concat(E.shuffle(IMG_IV.slice()).slice(0, 2));
+  const mini = imMini(E, 'imInterviewMini', { questions: qs, title: '모의면접', board: `교무실 · ${X.short} 모의면접`, sub: '담임 쌤 · 교감 쌤 · 민재 선배(영상)', cast: [{ body: '#6B4A8A', hair: '#2B2233', long: true, glasses: false, name: '담임 쌤' }, { body: '#3A4570', hair: '#9AA0AA', glasses: true, name: '교감 쌤' }, { body: '#3F5A8A', hair: '#1A1A1A', glasses: false, name: '선배(영상)' }], time: 9, onEnd: (sc) => { x.prep = E.clamp(0.4 + 0.6 * sc, 0, 1); } }, () => null);
+  E.runMinis([E.cardMini('면접 대비 · 모의면접', `${X.short} 2차 면접 ${X.ivDate} (예정·가상) · 교무실`, 'office', 'staffroom', 3), mini].filter(Boolean), () => {
+    if (x.prep == null) x.prep = 0.6;
+    imAlbum(E, '🎙️', `${X.short} 모의면접 — 교무실 의자 세 개`); imMental(E, 5);
+    E.say([{ who: hr, text: `${nm}결론 먼저, 경험 하나, 공직가치로 마무리. 오늘 두 번째 답 좋았어.` }, { who: hr, text: '면접 날엔 문 열기 전에 숨 크게 세 번. 쌤이 문자할게.' }], () => imSlotDone(E, s));
+  });
+}
+function imGongIv(E, s) {
+  const S = E.G.S, G = imGongSt(S), k = s.ex, X = IMG_EX[k], x = G.ex[k];
+  const qs = [Object.assign({}, X.iv0)].concat(E.shuffle(IMG_IV.slice()).slice(0, 2));
+  let sc = 0.6;
+  const mini = imMini(E, 'imInterviewMini', { questions: qs, title: `${X.short} 면접`, board: X.ivBoard, sub: '공직가치 · 직무 · 경험', time: 8, onEnd: (v) => { sc = v; } }, () => null);
+  E.statAdd('hp', -5);
+  E.runMinis([E.cardMini(`${X.name} · 2차 면접`, `${X.ivVenue} · ${X.ivDate} (예정·가상) · 면접위원 3명`, 'urgent', 'interview', 3), mini].filter(Boolean), () => {
+    imSlotDone(E, s);
+    x.ivSc = E.clamp(sc, 0, 1); x.ivDone = true;
+    const v = 0.5 * x.ivSc + 0.25 * (x.prep != null ? x.prep : 0.35) + 0.1 * Math.min(1, G.ivPrep || 0) + 0.15 * E.clamp((5 - imNaesinAvg(S)) / 4, 0, 1) + (imGongSeed(S, 'iv' + k) - 0.5) * 0.1 + (S.flags.ivSenior ? 0.04 : 0);
+    let fin = v >= 0.52; const f = imGongForcePass(k, 'f'); if (f != null) fin = f;
+    x.final = fin;
+    imAlbum(E, '🎤', `${X.short} 면접장 앞 대기 의자`); imMental(E, x.ivSc > 0.6 ? 4 : -4);
+    E.toast(`${X.short} 면접 ${Math.round(x.ivSc * 100)}% · 최종 발표 ${X.fin} (예정·가상)`, x.ivSc > 0.6 ? 'ok' : '');
+  });
+}
+
+/* =====================================================================
+   8. 달 흐름 · 브리핑 · 인트로 · 12월 · 2월(엔딩)
+   ===================================================================== */
+function imGongMonthStart(E, d) { // imVocIntro 에서 (첫 회차 · gong) — 원서 · 접수 자동 처리
+  const S = E.G.S, G = imGongSt(S), mi = d.mi;
+  imGongSkillInit(S);
+  if (mi === IM_MI.APR && !G.ex.gun.applied && !G.ex.gun.missed) { G.ex.gun.applied = true; imAlbum(E, '🎖️', '군무원 9급 (전기) 원서 접수 완료'); }
+  if (mi > IM_MI.APR && !G.ex.gun.applied) G.ex.gun.missed = true;
+}
+function imGongIntro(E, mi, L) {
+  const S = E.G.S, G = imGongSt(S);
+  imGongMonthStart(E, { mi });
+  if (mi === IM_MI.JAN) L.push({ who: '나', text: '겨울방학. 오후엔 컴활 2급 필기(상시검정), 그리고… 한능검 접수 마감이 오늘이던가?' });
+  if (mi === IM_MI.FEB && G.hk.reg.r1 && !imGongHkOK(S)) L.push({ who: '나', text: '오늘은 한능검 심화. 3급 이상 — 60점만 넘기면 응시자격 한 줄.' });
+  if (mi === IM_MI.APR) L.push({ who: '나', text: '군무원 원서 접수 완료. 8월 필기 — 국어 · 전기공학 · 전기기기.' });
+  if (mi === IM_MI.JUL && !G.chu) L.push({ who: '나', text: '오늘 학교장 추천 상담이 있다. 지역인재 · 교육청은 추천서가 있어야 원서를 낸다.' });
+  if (mi === IM_MI.AUG && G.ex.gun.applied) L.push({ who: '나', text: '오늘은 군무원 9급 필기. 신분증, 수험표, 컴퓨터용 사인펜.' });
+  if (mi === IM_MI.SEP) L.push({ who: '나', text: `토요일. ${G.ex.edu.applied ? '경기도교육청 필기 — 물리학개론 · 전기이론 · 전기기기.' : '교육청 원서는 추천이 없어 못 냈다. 오늘은 자습.'}` });
+  if (mi === IM_MI.CSAT) L.push({ who: '나', text: `수능 다음 토요일. ${G.ex.nat.applied ? '국가직 지역인재 9급 필기 — 국어 · 영어. 한국사는 한능검으로 대체.' : '친구들 수능 끝났고, 나는 내 시험을 기다린다.'}` });
+}
+function imGongBrief(E, d, sch, extra) {
+  const S = E.G.S, G = imGongSt(S), mi = d.mi, has = (k) => sch.some((x) => x.kind === k);
+  extra.push(`🏛️ 공무원(특성화고 전형) · 응시자격 ${imGongBadges(S)} — 하나라도 ✗면 응시 불가`);
+  if (has('comfil') || has('comsil')) extra.push('컴활 2급 (대한상공회의소 상시검정) — 필기: 과목 40↑·평균 60↑ · 실기: 70↑.');
+  if (has('hanguk')) extra.push(`한국사능력검정 심화 — 게임 응시자격 ${IMG_HK_NEED}급 이상 (60점↑).`);
+  if (has('gongexam')) { const x = sch.find((y) => y.kind === 'gongexam'); extra.push(`📝 ${x.title} — ${x.sub}`); }
+  if (has('gongres')) extra.push('합격자 발표 확인 — 새로고침 각오.');
+  if (has('gongprep')) extra.push('면접 대비 — 교무실 모의면접 (1차 합격 시).');
+  if (has('gongiv')) extra.push('2차 면접 — 공직가치 · 직무 · 경험. 정류장에서 면접장으로.');
+  if (has('chucheon')) extra.push('학교장 추천: 상담 16:40 → 교장실 17:15 (지역인재 · 교육청 원서에 필요).');
+  if (has('gisa2')) extra.push('정기 기능사 실기 재도전 — 응시자격 첫 줄을 되찾는 날.');
+  if (mi === IM_MI.JAN && !G.hk.reg.r1) extra.push('⚠ 한능검 접수 18:00 마감 — 내 방 노트북에서!');
+}
+function imGongDec(E) {
+  const S = E.G.S, G = imGongSt(S), X = G.ex;
+  E.G.min = E.T('09:50');
+  const after = () => E.runMinis([E.cardMini('졸업 작품 전시회', 'AI전자과 · 스마트팜 센서 · 자동 급식기', 'class', 'workshop', 5)], () => { imAlbum(E, '🖼️', '졸업 작품 전시회 — 우리 팀 부스'); imApply(E, { mental: 8, burnout: -6 }, '졸업 작품 전시회'); });
+  const doNat = () => (X.nat.taken && !X.nat.shown1 ? imGongReveal(E, { ex: 'nat', stage: '1' }, after) : after());
+  if (X.edu.ivDone && !X.edu.shownF) return imGongReveal(E, { ex: 'edu', stage: 'f' }, doNat);
+  doNat();
+}
+function imGongPasses(S) { const G = imGongSt(S); return IMG_ORDER.filter((k) => G.ex[k].final); }
+function imGongFeb(E) {
+  const S = E.G.S, G = imGongSt(S);
+  E.G.min = E.T('09:50');
+  imVocGraduate(E, () => {
+    const P = imGongPasses(S);
+    if (!P.length) {
+      const any1 = IMG_ORDER.some((k) => G.ex[k].pass1), noreq = IMG_ORDER.some((k) => G.ex[k].noreq) || !IMG_ORDER.some((k) => G.ex[k].taken);
+      return imEnding(E, any1 ? 'gong1st' : noreq ? 'gongreq' : 'gongnext');
+    }
+    const fin = (k) => {
+      G.accepted = k;
+      const X = IMG_EX[k];
+      E.runMinis([E.phoneMini(X.short === '군무원' ? '국방부 인사 담당 (가상)' : X.short === '경기도교육청' ? '경기도교육청 인사 담당 (가상)' : '인사혁신처 담당 (가상)', [[1.5, 'c', `${imName(S) === '나' ? '합격자' : imName(S)}님, ${X.short} 임용 관련 안내 전화드렸습니다.`], [4.4, 'c', k === 'nat' ? '3월 수습 시작 — 6개월 뒤 정식 9급 임용입니다.' : '3월 임용 예정입니다. 첫 출근 안내 문자 드릴게요.'], [7.2, 'm', '네! 감사합니다. 열심히 하겠습니다!']], { end: 10 })], () => { imAlbum(E, '🪪', `${X.short} 임용 안내 문자 — 첫 출근 3월`); imEnding(E, 'gong' + k); });
+    };
+    if (P.length === 1) return fin(P[0]);
+    imChoice(E, { id: 'vocGongAccept', title: '어디로 갈까?', sub: `최종 합격 ${P.length}곳 · 한 곳만 임용`, who: '나', text: E.esc('여러 곳에 붙었다. 한 곳에만 임용될 수 있다 — 나머지는 포기 의사를 알린다.'), opts: P.map((k) => ({ label: `${IMG_EX[k].icon} ${IMG_EX[k].name}`, sub: k === 'gun' ? '군 부대 전기 설비 · 군무원' : k === 'edu' ? '경기도 학교 시설 · 교육청 9급' : '국가직 · 6개월 수습 후 임용', fn: () => fin(k) })) });
+  });
+}
+
+/* =====================================================================
+   9. 봇 · 시작 시점 · 목표 전환
+   ===================================================================== */
+function imGongBotChoice(E, o) {
+  const S = E.G.S, D = E.G.D || {};
+  if (o.id === 'vocGong') { if (S.hp < 28) return o.opts.length - 2; D.vgN = (D.vgN || 0) + 1; const R = [0, 1, 0, 2, 3]; return R[(D.vgN + S.mi) % R.length]; }
+  return 0;
+}
+function imGongApplyStart(E, S) { // imVocApplyStart 뒤 (goal 무관하게 sk.gong 준비 · gong 이면 이미 지난 시험 미리 정하기)
+  imGongSkillInit(S);
+  if (S.vocGoal !== 'gong') return;
+  const G = imGongSt(S), st = S.startMi || 0, fc = imGongForce(), r = (k) => imGongSeed(S, 'pre' + k);
+  if (st >= IM_MI.MAR) {
+    G.hk.reg.r1 = true; const p = fc.hanguk === 'pass' ? true : fc.hanguk === 'fail' ? false : r('hk') < 0.7; G.hk.tries.push({ round: 'r1', score: p ? 72 : 54, grade: p ? 2 : 0, mi: IM_MI.FEB, pre: true }); if (p) G.hk.best = 2; else G.hk.reg.r2 = true;
+    const c = fc.comhwal === 'pass' ? true : fc.comhwal === 'fail' ? false : r('com') < 0.75; G.com.fil = true; G.com.sil = c; G.com.tries.push({ kind: '실기', score: c ? 78 : 62, pass: c, mi: IM_MI.FEB, pre: true });
+    if (p) imAlbum(E, '📜', '한국사능력검정 심화 2급'); if (c) imAlbum(E, '💻', '컴퓨터활용능력 2급 최종 합격');
+  }
+  if (st >= IM_MI.JUL) {
+    G.ex.gun.applied = true;
+    if (!imGongHkOK(S)) { const p = fc.hanguk === 'pass' ? true : fc.hanguk === 'fail' ? false : r('hk2') < 0.6; G.hk.tries.push({ round: 'r2', score: p ? 66 : 50, grade: p ? 3 : 0, mi: IM_MI.MAY, pre: true }); if (p) G.hk.best = 3; else G.hk.reg.r3 = true; }
+    if (!imGongComOK(S)) { const c = fc.comhwal === 'pass' ? true : fc.comhwal === 'fail' ? false : r('com2') < 0.6; G.com.sil = c; }
+    if (S.cert && !S.cert.pass) G.gisa2 = { want: true, pass: null };
+  }
+  if (st >= IM_MI.SEP) {
+    if (G.gisa2 && G.gisa2.pass == null) G.gisa2.pass = fc.gisa === 'fail' ? false : fc.gisa === 'retry' || fc.gisa === 'pass' ? true : r('g2') < 0.6;
+    const C = imGongChuCriteria(S); let ok = C.pts >= 3; if (fc.chucheon === 'yes') ok = true; if (fc.chucheon === 'no') ok = false;
+    G.chu = { ok, pts: C.pts, rows: C.rows, issued: ok, pre: true }; if (ok) { G.ex.edu.applied = true; G.ex.nat.applied = true; imAlbum(E, '📜', '학교장 추천서 — 직인 쾅'); }
+    const x = G.ex.gun, miss = imGongMissing(S);
+    if (miss.length) x.noreq = miss;
+    else { const sc = {}; IMG_EX.gun.subs.forEach(([p, nm]) => { sc[nm] = Math.round(48 + r('gs' + nm) * 34); }); const J = imGongJudge1(E, 'gun', sc); Object.assign(x, { taken: true, scores: sc, avg: J.avg, pass1: J.pass, shown1: false, pre: true }); }
+  }
+}
+function imGongOnGoal(E, from, to) { // 담임 상담에서 목표 변경
+  const S = E.G.S;
+  if (to !== 'gong') return;
+  imGongSkillInit(S); const G = imGongSt(S);
+  if (S.mi > IM_MI.APR && !G.ex.gun.applied) G.ex.gun.missed = true;
+  if (S.mi >= IM_MI.FEB && !G.hk.reg.r1) G.hk.reg.r2 = true;
+  if (S.mi >= IM_MI.MAY && !imGongHkOK(S)) G.hk.reg.r3 = true;
+  if (S.cert && !S.cert.pass && !G.gisa2) G.gisa2 = { want: true, pass: null };
+}
+
+/* =====================================================================
+   10. 자습 · 상태 문구 · 엔딩 · 결시
+   ===================================================================== */
+function imGongSelf(E, where, slot) {
+  const S = E.G.S, m = E.G.min, G = imGongSt(S);
+  if (where === 'library' && imIsVac(S, S.mi) && m >= E.T('18:00')) return E.say([{ who: 'EBS실', text: '「방학 중 운영 09:00~18:00」 — 문이 잠겨 있다.' }, { who: '나', text: '오늘은 집에서 마저 하자.' }]);
+  if (where === 'library' && (m >= E.T('21:00') || m < E.T('08:00'))) return E.say([{ who: 'EBS실 코디 쌤', text: '21시 소등이에요~ 내일 또 봐요!' }, { who: '나', text: '남은 건 집에서. 기출 한 장은 가방에.' }]);
+  if (!imTimeOK(E, 40, '자습')) return;
+  const subs = [['etheory', '전기이론'], ['emach', '전기기기'], ['phy', '물리학개론']], pk = subs[(S.mi + ((E.G.D && E.G.D.vgN) || 0)) % 3], wk = imWeakest(E, ['kor', 'eng']);
+  const gq = () => { const qs = imPickQs(E, [pk[0]], 5, { reask: 2 }), time = imQuizTime(E); E.runMinis([imConcept(E, qs, { bg: 'ebsroom' }), imQuiz(E, { qs, title: `공무원 기출 · ${pk[1]}`, subject: pk[1], sub: `${time}초 3지선다`, time, count: 5, track: 'voc', bg: 'ebsroom', onEnd: (sc, mm) => { imNoteWrong(E, mm); const n = imGain(E, 'gong', 1.5 + 4.5 * sc); imStudied(E, 60, sc); imMental(E, -4); E.statAdd('hp', -4); E.toast(`${pk[1]} 기출 ${Math.round(sc * 100)}% · 공무원 전공 +${n.toFixed(1)}`, sc > 0.6 ? 'ok' : ''); } })].filter(Boolean), () => imVocUse(E, 60)); };
+  const hq = () => { const qs = imPickQs(E, ['hk', 'hist'], 5, { reask: 2 }); E.runMinis([imQuiz(E, { qs, title: '한능검 대비 · 한국사', subject: '한국사', sub: '심화 3급 이상!', time: imQuizTime(E), count: 5, track: 'voc', bg: 'ebsroom', onEnd: (sc, mm) => { imNoteWrong(E, mm); const n = imGain(E, 'hist', 1.5 + 4 * sc); G.hk.prep = Math.min(30, (G.hk.prep || 0) + 3 + 4 * sc); imStudied(E, 60, sc); imMental(E, -3); E.toast(`한국사 ${Math.round(sc * 100)}% · +${n.toFixed(1)}`, sc > 0.6 ? 'ok' : ''); } })].filter(Boolean), () => imVocUse(E, 60)); };
+  const cq = () => { const qs = imPickQs(E, ['comp'], 5, { reask: 2 }); E.runMinis([imQuiz(E, { qs, title: '컴활 2급 기출', subject: '컴활', sub: '컴퓨터 일반 · 스프레드시트', time: imQuizTime(E), count: 5, track: 'voc', bg: 'ebsroom', onEnd: (sc, mm) => { imNoteWrong(E, mm); G.com.prep = Math.min(30, (G.com.prep || 0) + 3 + 5 * sc); imStudied(E, 40, sc); imMental(E, -2); E.toast(`컴활 기출 ${Math.round(sc * 100)}% · 컴활 실력 +`, sc > 0.6 ? 'ok' : ''); } })].filter(Boolean), () => imVocUse(E, 40)); };
+  const iq = () => { G.ivPrep = Math.min(1, (G.ivPrep || 0) + 0.08); imUseTime(E, 40); imApply(E, { mental: 3 }, '면접 답변 노트 — 결론 먼저, 경험 하나'); };
+  imChoice(E, { id: 'vocGong', title: slot && slot.title ? slot.title : 'EBS 자기주도학습실', sub: `${E.hm(m)} · 공무원 준비 · 응시자격 ${imGongBadges(S)}`, text: `공무원 전공 <b>${Math.round(S.sk.gong || 0)}</b> · 국어 <b>${Math.round(S.sk.kor)}</b> · 영어 <b>${Math.round(S.sk.eng)}</b> · 한국사 <b>${Math.round(S.sk.hist)}</b>${(S.wrongQ || []).length ? ` · 오답노트 ${S.wrongQ.length}` : ''}`, opts: [
+    { label: `공무원 기출 회독 · ${pk[1]} (60분)`, sub: '공무원 전공 + · 오답노트', fn: gq },
+    { label: `EBS 강의 · ${imSkLabel(wk)} (60분)`, sub: `국가직·군무원 ${imSkLabel(wk)} +`, fn: () => imVocEbsLecture(E, wk) },
+    imGongHkOK(S) ? { label: '공직가치 · 면접 답변 노트 (40분)', sub: '면접 대비 +', fn: iq } : { label: '한능검 대비 · 한국사 (60분)', sub: `심화 ${IMG_HK_NEED}급 이상 목표`, fn: hq },
+    imGongComOK(S) ? { label: '전자 이론 퀴즈 (70분)', sub: '전공(전자) +', fn: () => imVocElecQuiz(E) } : { label: '컴활 2급 기출 (40분)', sub: '필기 · 실기 대비', fn: cq },
+    { label: '오답 분류 · 전공 개념 (90분)', sub: '전 과목 조금씩 +', fn: () => imSelfSort(E) },
+    { label: '폰 잠깐만… (?)', sub: '숏폼 알림을 이기면 멘탈 + · 지면 30분 증발', fn: () => imPhone(E) },
+    { label: '엎드려 자기 (40분)', sub: '체력 +12 · 양심 −', fn: () => { imUseTime(E, 40); imApply(E, { hp: 12, mental: 2 }, '책상 쪽잠'); } },
+    { label: '그만', fn: () => {} }] });
+}
+function imGongExStatus(S, k) {
+  const G = imGongSt(S), x = G.ex[k], X = IMG_EX[k];
+  if (x.final != null && x.shownF) return x.final ? '최종 합격' : '최종 불합격';
+  if (x.ivDone) return '면접 끝 · 최종 발표 대기';
+  if (x.pass1 != null && x.shown1) return x.pass1 ? '1차 합격 · 면접 준비' : '1차 불합격';
+  if (x.noreq) return `응시 불가 (${x.noreq.join(' · ')})`;
+  if (x.absent) return '결시';
+  if (x.taken) return '필기 끝 · 발표 대기';
+  if (x.applied) return '원서 접수 ✓';
+  if (x.missed) return '원서 기간 지남';
+  return X.chu ? (G.chu ? (G.chu.ok ? '추천 ✓' : '학교장 추천 ✗') : '7월 학교장 추천 필요') : '4월 원서 접수';
+}
+function imGongEndK(S, sn) {
+  const G = S.gong || {}, miss = (IMG_ORDER.map((k) => G.ex && G.ex[k] && G.ex[k].noreq).find(Boolean) || imGongMissing(S)).join(' · ');
+  return {
+    gonggun: ['군무원 9급 최종 합격', `${sn}9급 군무원(전기) 최종 합격. 부대의 전기 설비를 지키는 첫 출근 — 실습실에서 납땜하던 손이 이제 막사의 불을 켠다.`, '🎖️'],
+    gongedu: ['경기도교육청 9급 최종 합격', `${sn}경기도교육청 기술계고 경력경쟁(일반전기 9급) 최종 합격. 이번엔 내가 후배들 교실의 불을 지킨다.`, '🏫'],
+    gongnat: ['국가직 지역인재 9급 최종 합격', `${sn}지역인재 9급(전기) 최종 합격. 학교장 추천서 한 장에서 시작해, 6개월 수습 뒤 정식 9급.`, '🏛️'],
+    gong1st: ['1차 합격, 그다음 길', '필기는 넘었다. 면접 문 앞에서 이번엔 멈췄지만, 합격선을 넘은 점수는 진짜다. 내년 다시 — 또는 먼저 일하며 준비하는 길도 있다.', '🌱'],
+    gongreq: ['응시자격, 다음엔 꼭', `${miss || '응시자격'} 때문에 이번엔 원서가 막혔다. 자격은 졸업 뒤에도 딸 수 있다 — 쌓은 실력은 그대로, 길은 취업 · 진학 · 내년 시험으로 이어진다.`, '🌱'],
+    gongnext: ['필기, 한 끗', '세 번의 필기가 이번엔 합격선에 닿지 않았다. 빨간 별 기출 노트는 그대로다. 내년 시험, 또는 먼저 일하며 준비하는 길.', '🌱'],
+  };
+}
+function imGongFinalRows(E, rows) {
+  const S = E.G.S, G = imGongSt(S), esc = E.esc, hk = G.hk.best, R = imGongReqs(S);
+  rows.push(`<div>🏛️ 공무원(특성화고 전형) 응시자격 — ${R.map((r) => `${r.icon} ${r.ok ? '✓' : '✗'}`).join(' ')}</div>`);
+  rows.push(`<div style="font-size:11.5px">${imGongCertOK(S) ? '🏅 기능사' : '🔧 기능사 ✗'} · ${hk ? `📜 한능검 심화 ${hk}급` : '📜 한능검 ✗'} · ${imGongComOK(S) ? '💻 컴활 2급' : '💻 컴활 ✗'}${S.plan && S.plan.n ? ` · 📒 플래너 도장 ${S.plan.good}/${S.plan.n}` : ''}${G.chu ? ` · 📜 학교장 추천 ${G.chu.ok ? '✓' : '✗'}` : ''}</div>`);
+  if (S.vocGoal === 'gong') rows.push(`<div style="font-size:11.5px">${IMG_ORDER.map((k) => `${IMG_EX[k].icon} ${esc(IMG_EX[k].short)} ${esc(imGongExStatus(S, k))}`).join(' · ')}</div>`);
+}
+function imGongSlotMiss(E, s) {
+  const S = E.G.S; if (s.kind === 'coach') return true; if (!S.gong) return false;
+  const G = S.gong, x = s.ex ? G.ex[s.ex] : null;
+  switch (s.kind) {
+    case 'gongexam': x.absent = true; imApply(E, { mental: -12 }, `${IMG_EX[s.ex].short} 필기 결시`); return true;
+    case 'gongiv': x.ivDone = true; x.ivSc = null; x.final = false; imApply(E, { mental: -12 }, `${IMG_EX[s.ex].short} 면접 결시`); return true;
+    case 'gongres': E.whenFree(() => imGongReveal(E, Object.assign({}, s, { e: null }))); return true;
+    case 'gongprep': return true;
+    case 'hanguk': if (s.round === 'r1') G.hk.reg.r2 = true; else if (s.round === 'r2') G.hk.reg.r3 = true; imApply(E, { mental: -6 }, '한능검 결시'); return true;
+    case 'comfil': case 'comsil': imApply(E, { mental: -4 }, '컴활 결시'); return true;
+    case 'gisa2': G.gisa2.pass = false; imApply(E, { mental: -10 }, '정기 검정 결시'); return true;
+    case 'chucheon': if (!G.chu) { const C = imGongChuCriteria(S); G.chu = { ok: C.pts >= 3, pts: C.pts, rows: C.rows }; } return true;
+    case 'principal': if (G.chu && G.chu.ok && !G.chu.issued) E.whenFree(() => imGongPrincipal(E, null)); return true;
+    default: return false;
+  }
+}
+function imGongPrincipalFree(E) {
+  const S = E.G.S, P = IMG_PRINCIPAL;
+  const L = S.track === 'voc' && S.gong && S.gong.chu && S.gong.chu.issued ? [{ who: P.short, text: '추천서 받은 학생이구나. 시험장에선 실습실처럼 차분하게. 응원해요.' }] : [{ who: '교장실', text: '「교장실」 — 문이 반쯤 열려 있다. 안에서 결재 도장 소리가 들린다.' }, { who: P.short, text: '(창가에서) 실습실 불이 늦게까지 켜져 있더군요. 다들 고생 많아요.' }];
+  E.say(L, () => imApply(E, { mental: 2 }, '교장 선생님 인사', true));
+}
+
 /* ===== g3-core.js ===== */
 /* =====================================================================
    g3-core.js — 고3 D-day 캠페인 (전략·계열 선택 · 한 달 = 하루 · 게이지 · 내신/생기부 · 모의 · 수능 · 원서 · 발표 · 엔딩 · 재수)
@@ -8137,8 +9161,8 @@ function imCard(E, html, onClose, btn) {
 const imTable = (E, head, rows) => `<style>.imtb{width:100%;border-collapse:collapse;margin:8px 0 2px;font-size:12.5px;table-layout:auto}.imtb th{background:#E9EEF8;color:#1B2340;padding:5px 3px;font-weight:800;border:1px solid #C9D3E3}.imtb td{color:var(--ink);background:rgba(255,255,255,.05);border:1px solid var(--line);padding:5px 3px;font-weight:700;word-break:keep-all;overflow-wrap:anywhere}.imtb td small{color:var(--ink-2);font-size:10px}</style><table class="imtb"><tr>${head.map((h) => `<th>${E.esc(h)}</th>`).join('')}</tr>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</table>`;
 
 /* ---------- 5. 일정 (학기 중 · 방학 · 시험 · 재수) ---------- */
-const IMC_KIND_CLS = { arrive: 'after', card10: 'after', gachae: 'after', inkang: 'g3', study: 'free', plan: 'free', free: 'free', class: 'g1', mock: 'g2', naesin: 'g2', suhaeng: 'gs', setuk: 'gs', consult: 'after', interview: 'g2', academy: 'g3', jaejong: 'g3', yaja: 'free', scafe: 'free', meal: 'lunch', event: 'after', csat: 'g2', prac: 'gs', ebs: 'free', gisa: 'g2', cbt: 'g2' };
-const IMC_MUST = { arrive: 1, class: 1, mock: 1, naesin: 1, suhaeng: 1, academy: 1, jaejong: 1, inkang: 1, interview: 1, csat: 1, consult: 1, yaja: 1, study: 1, setuk: 1, card10: 1, prac: 1, ebs: 1, gisa: 1, cbt: 1 };
+const IMC_KIND_CLS = { arrive: 'after', card10: 'after', gachae: 'after', inkang: 'g3', study: 'free', plan: 'free', free: 'free', class: 'g1', mock: 'g2', naesin: 'g2', suhaeng: 'gs', setuk: 'gs', consult: 'after', interview: 'g2', academy: 'g3', jaejong: 'g3', yaja: 'free', scafe: 'free', meal: 'lunch', event: 'after', csat: 'g2', prac: 'gs', ebs: 'free', gisa: 'g2', cbt: 'g2', coach: 'gs', gongexam: 'g2', gongiv: 'g2', gongprep: 'after', gongres: 'after', hanguk: 'g2', comfil: 'g2', comsil: 'g2', gisa2: 'g2', chucheon: 'after', principal: 'after' };
+const IMC_MUST = { arrive: 1, class: 1, mock: 1, naesin: 1, suhaeng: 1, academy: 1, jaejong: 1, inkang: 1, interview: 1, csat: 1, consult: 1, yaja: 1, study: 1, setuk: 1, card10: 1, prac: 1, ebs: 1, gisa: 1, cbt: 1, gongexam: 1, gongiv: 1, gongprep: 1, gongres: 1, hanguk: 1, comfil: 1, comsil: 1, gisa2: 1, chucheon: 1, principal: 1 };
 const IMC_SUBROT = [[['kor', 'math'], ['eng', 'tam']], [['math', 'eng'], ['kor', 'hist']], [['eng', 'kor'], ['math', 'tam']], [['tam', 'math'], ['kor', 'eng']]];
 const imB = (at, len, kind, title, loc, o) => Object.assign({ at, len, kind, title, loc }, o || {});
 function imLocFix(E, loc) {
@@ -8193,7 +9217,7 @@ function imDataSched(E, mi, M) {
 function imSchedFor(E, mi) {
   const S = E.G.S, t = imTrackOf(E), L = [];
   if (S.rest || mi === IM_MI.LAST) return [];
-  if (S.track === 'voc' && S.nth === 1 && !(S.vocGoal === 'jungsi' && mi >= IM_MI.CSAT)) return imVocSched(E, mi);
+  if (S.track === 'voc' && S.nth === 1 && !(S.vocGoal === 'jungsi' && mi >= IM_MI.CSAT)) return S.vocGoal === 'gong' ? imGongSched(E, mi, imVocSched(E, mi)) : imVocSched(E, mi);
   const softOf = (from) => { const DM = imMonths()[mi]; if (S.nth > 1 || !DM || !Array.isArray(DM.schedule)) return []; return imDataSched(E, mi, { schedule: DM.schedule.filter((b) => (b.soft || b.k === 'free') && b.k !== 'exam' && b.at >= from && !(b.loc === 'exam')), exams: DM.exams }); };
   if (mi === IM_MI.DEC) return imFinish(E, softOf('11:00'));
   if (mi === IM_MI.CSAT) {
@@ -8284,7 +9308,7 @@ function imBuildDays() {
     };
   }).map((d) => { const base = d.title; Object.defineProperty(d, 'title', { enumerable: true, configurable: true, get() { try { const S = window.IMGO && window.IMGO.G && window.IMGO.G.S; return S && S.track ? imDayTitle({ mi: d.mi, title: base }, S) : base; } catch (e) { return base; } } }); return d; });
 }
-function imDayTitle(d, S) { if (S && S.track === 'voc' && S.nth === 1) { const V = imGet('IM_VOC'); if (V && V.titles[d.mi]) return V.titles[d.mi]; } if (S && S.nth > 1 && d.mi >= IM_MI.FEB && d.mi <= IM_MI.OCT) return ['', '', '', '재종 개강', '재종 3월', '재종 4월', '재종 5월', '6월 모평 · 재수생 첫 평가원', '재종 7월', '8월 모평 · 원서 상담', '수시 원서 6장', '재종 10월 · D-30'][d.mi] || d.title; return d.title; }
+function imDayTitle(d, S) { if (S && S.track === 'voc' && S.nth === 1) { const V = imGet('IM_VOC'); if (V && S.vocGoal === 'gong' && V.titles.gong && V.titles.gong[d.mi]) return V.titles.gong[d.mi]; if (V && V.titles[d.mi]) return V.titles[d.mi]; } if (S && S.nth > 1 && d.mi >= IM_MI.FEB && d.mi <= IM_MI.OCT) return ['', '', '', '재종 개강', '재종 3월', '재종 4월', '재종 5월', '6월 모평 · 재수생 첫 평가원', '재종 7월', '8월 모평 · 원서 상담', '수시 원서 6장', '재종 10월 · D-30'][d.mi] || d.title; return d.title; }
 
 /* ---------- 7. 미니 감싸기 (모듈 없으면 엔진 미니로 대체) ---------- */
 function imMini(E, name, opts, fallback) {
@@ -9359,11 +10383,11 @@ function imOnDayStart(d, E, quiet) {
     return;
   }
   if (mi === IM_MI.DEC) {
-    if (S.track === 'voc' && S.nth === 1 && S.vocGoal !== 'jungsi') return imVocDec(E);
+    if (S.track === 'voc' && S.nth === 1 && S.vocGoal !== 'jungsi') return S.vocGoal === 'gong' ? imGongDec(E) : imVocDec(E);
     if (S.csat && S.csat.late) { E.G.min = E.T('10:00'); return E.say([{ who: '나', text: '수능 성적표가 없는 12월. 친구들 단톡방이 조용하다.' }], () => imEnding(E, 'late')); }
     return imDecFlow(E);
   }
-  if (mi === IM_MI.LAST) return S.track === 'voc' && S.nth === 1 && S.vocGoal !== 'jungsi' ? imVocFeb(E) : imFebFlow(E);
+  if (mi === IM_MI.LAST) return S.track === 'voc' && S.nth === 1 && S.vocGoal !== 'jungsi' ? (S.vocGoal === 'gong' ? imGongFeb(E) : imVocFeb(E)) : imFebFlow(E);
   const intro = imDefaultIntro(E, mi);
   const stage = imMornStage(E, mi);
   const runIntro = () => { if (intro.length) E.say(intro, () => { E.sfx.chime(); if (stage) imMorning(E, stage); }); else if (stage) imMorning(E, stage); };
@@ -9552,6 +10576,7 @@ function imInteract(it, E) {
   switch (key) {
     case 'library': imSelf(E, 'library'); return true;
     case 'lab': imVocLab(E); return true;
+    case 'principal': imGongPrincipalFree(E); return true;
     case 'studycafe': imSelf(E, 'scafe'); return true;
     case 'room': imRoom(E); return true;
     case 'living': imLiving(E); return true;
@@ -9588,13 +10613,14 @@ function imOnQuest(q, it, E) {
   if (q.id === 'q-jungsi') return imJungsiApply(E, q);
   if (q.id === 'q-scout') return imScout(E, q);
   if (q.id === 'q-dongil') return imVocDongilApply(E, q);
+  if (q.id === 'q-hk') return imGongHkQuest(E, q);
   if (q.id === 'q-hello') return E.say([{ who: '나', text: '다녀오겠습니다!' }, { who: '엄마', text: `${imVoc(S)}, 우산 챙겨! 그리고 밥 꼭 먹고.` }], () => { E.completeQuest(q.id); imMental(E, 3); });
   E.say([{ who: '나', text: `${q.title} 완료!` }], () => E.completeQuest(q.id));
 }
 function imQuestsFor(E, mi) {
   const S = E.G.S, L = [];
   if (S.nth === 1 && mi === (S.startMi || 0) && mi !== IM_MI.SEP) L.push({ id: 'q-hello', title: '엄마한테 인사', at: 'mom', icon: '🏠', color: IMC_COL.hr, cat: '생활', dueAt: '07:55' });
-  if (S.track === 'voc' && S.nth === 1) { if (mi === IM_MI.SEP && S.vocGoal === 'dongil' && !(S.dongil && (S.dongil.applied || S.dongil.missed))) L.push({ id: 'q-dongil', title: '동일계 원서 3장 (특성화고교졸업자 전형)', at: 'door:staff', icon: '🎓', color: IMC_COL.hot, cat: '마감', dueAt: '17:50' }); }
+  if (S.track === 'voc' && S.nth === 1) { if (mi === IM_MI.JAN && S.vocGoal === 'gong' && !imGongSt(S).hk.reg.r1) L.push({ id: 'q-hk', title: '한능검 접수 (2월 시험 · 18:00 마감)', at: 'door:room', icon: '📜', color: IMC_COL.hot, cat: '마감', dueAt: '18:00' }); if (mi === IM_MI.SEP && S.vocGoal === 'dongil' && !(S.dongil && (S.dongil.applied || S.dongil.missed))) L.push({ id: 'q-dongil', title: '동일계 원서 3장 (특성화고교졸업자 전형)', at: 'door:staff', icon: '🎓', color: IMC_COL.hot, cat: '마감', dueAt: '17:50' }); }
   else if (mi === IM_MI.SEP && !(S.susi && S.susi.applied)) L.push({ id: 'q-wonseo', title: '수시 원서 6장 접수', at: 'door:room', icon: '📝', color: IMC_COL.hot, cat: '마감', dueAt: '18:00' });
   if (mi === IM_MI.OCT && !S.flags.scout1 && imTakesCsat(S) && !(imLateOn(S) && imLF('noscout'))) L.push(imScoutQuest());
   return L.map((q) => Object.assign(q, { at: imLocFix(E, q.at) }));
@@ -9611,13 +10637,14 @@ function imOnQuestMiss(q, E) {
   }
   if (q.id === 'q-jungsi') { S.jungsi = { cards: [], applied: false, missed: true }; E.G.quests = E.G.quests.filter((x) => x.id !== q.id); E.toast('정시 원서 마감… 올해 지원 못 함', 'bad'); imMental(E, -15); return; }
   if (q.id === 'q-dongil') { S.dongil = { cards: [], applied: false, missed: true }; E.G.quests = E.G.quests.filter((x) => x.id !== q.id); imMental(E, -12); E.toast('동일계 원서 마감… 올해는 지원 못 함', 'bad'); return; }
+  if (q.id === 'q-hk') { E.G.quests = E.G.quests.filter((x) => x.id !== q.id); imGongSt(E.G.S).hk.reg.r2 = true; imMental(E, -8); imAlbum(E, '⏰', '한능검 접수 마감 1분 지남 — 5월 회차로'); E.toast('한능검 접수 마감… 5월 회차로 밀렸다', 'bad'); return; }
   if (q.id === 'q-scout') { E.G.quests = E.G.quests.filter((x) => x.id !== q.id); E.toast('시험장 답사는 못 갔다 · 수능날 길만 잘 찾자', ''); return; }
   if (q.id === 'q-hello') { E.G.quests = E.G.quests.filter((x) => x.id !== q.id); return; }
   E.toast(`놓침: ${q.title}`, 'bad');
 }
 
 /* ---------- 18. 화면: HUD · 사이드 · 로그 · 카드 ---------- */
-function imSubjList(E) { return E.G.S.track === 'voc' ? [['kor', '국어', '국'], ['math', '수학', '수'], ['eng', '영어', '영'], ['tam', '직업탐구', '직탐'], ['jeon', '전공(전자)', '전공']] : IMC_SUBJ; }
+function imSubjList(E) { if (E.G.S.track === 'voc' && E.G.S.vocGoal === 'gong' && E.G.S.nth === 1) return [['kor', '국어', '국'], ['eng', '영어', '영'], ['hist', '한국사', '한'], ['gong', '공무원 전공(전기·물리)', '전기'], ['jeon', '전공(전자)', '전공']]; return E.G.S.track === 'voc' ? [['kor', '국어', '국'], ['math', '수학', '수'], ['eng', '영어', '영'], ['tam', '직업탐구', '직탐'], ['jeon', '전공(전자)', '전공']] : IMC_SUBJ; }
 function imSkillLine(E, short) { const S = E.G.S; return imSubjList(E).map(([k, l, s]) => `${short ? s : l} ${Math.round(S.sk[k] || 0)}`).join(' · '); }
 function imDday(E) {
   const S = E.G.S, mi = S.mi, ym = IMC_YM[mi] || IMC_YM[0], frac = E.G.D ? E.clamp((E.G.min - 420) / 1020, 0, 1) : 0;
@@ -9634,14 +10661,14 @@ function imDdayText(E) {
 function imHudLines(E) {
   const S = E.G.S, t = imTrackOf(E), d = E.day;
   const b = S.burnout >= 70 ? { text: `🔥 번아웃 ${Math.round(S.burnout)}% · 멘탈 소모 ↑ · 쉬어야 해`, color: IMC_COL.hot } : null;
-  if (t.id === 'voc' && S.nth === 1) return [`${t.icon} ${S.name ? S.name + ' · ' : ''}${S.mi <= IM_MI.FEB ? 2 : 3}학년 AI전자과 · ${d.month}`, imSkillLine(E, true), b || `${imDdayText(E)} · 내신 ${imNaesinAvg(S).toFixed(2)} · ${S.cert ? (S.cert.pass ? '🏅기능사' : '기능사 ✗') : '생기부 ' + Math.round(S.saeng)}`];
+  if (t.id === 'voc' && S.nth === 1) return [`${t.icon} ${S.name ? S.name + ' · ' : ''}${S.mi <= IM_MI.FEB ? 2 : 3}학년 AI전자과 · ${d.month}`, imSkillLine(E, true), b || (S.vocGoal === 'gong' ? `${imDdayText(E)} · 응시자격 ${imGongBadges(S)}` : `${imDdayText(E)} · 내신 ${imNaesinAvg(S).toFixed(2)} · ${S.cert ? (S.cert.pass ? '🏅기능사' : '기능사 ✗') : '생기부 ' + Math.round(S.saeng)}`)];
   return [`${t.icon || ''} ${S.name ? S.name + ' · ' : ''}${t.name} · ${imGradeLabel(S.mi, S)} ${d.month}`, imSkillLine(E, true), b || `${imDdayText(E)} · 내신 ${imNaesinAvg(S).toFixed(2)} · 생기부 ${Math.round(S.saeng)}`];
 }
 function imSideNext(E) {
   const G = E.G, S = G.S, nx = E.nextSlot(), m = G.min;
   if (nx) { const left = Math.ceil(nx.s - m); return { html: `다음 일정<b>${E.esc(nx.title)}</b><em>${left > 0 ? `${left}분 뒤 · ${E.esc(E.locName(nx.loc) || '')}` : '지금 가기!'}</em>`, hot: left <= 10 }; }
   if (m >= E.T('23:00')) return { html: '잠<b>23:00</b><em>내 방 침대로!</em>', hot: true };
-  const tip = S.hp < 35 ? '배고파 → 급식·매점·집밥' : S.mental < 35 ? '멘탈 ↓ → 운동장·코노' : S.mi >= IM_MI.DEC ? '푹 쉬기' : S.track === 'voc' ? (m < E.T('21:00') ? '자습 → EBS실 · 실습실' : '내 방에서 마무리') : '자습 → 도서관·스카';
+  const tip = S.hp < 35 ? '배고파 → 급식·매점·집밥' : S.mental < 35 ? '멘탈 ↓ → 운동장·코노' : S.mi >= IM_MI.DEC ? '푹 쉬기' : S.track === 'voc' ? (S.vocGoal === 'gong' && S.nth === 1 ? `응시자격 ${imGongBadges(S)}` : m < E.T('21:00') ? '자습 → EBS실 · 실습실' : '내 방에서 마무리') : '자습 → 도서관·스카';
   return { html: `자유 시간<b>${E.esc(imDdayText(E))}</b><em>${E.esc(tip)}</em>`, hot: false };
 }
 function imSideStatus(E) {
@@ -9661,7 +10688,7 @@ function imLogHTML(E) {
   const led = S.ledger.slice(-6).reverse().map((l) => `<tr><td>${imMonthLabel(l.mi)}</td><td style="text-align:left">${esc(l.item)}</td><td style="color:${l.amt < 0 ? '#C62828' : '#1F7A4D'}">${l.amt > 0 ? '+' : ''}${l.amt}만</td></tr>`).join('');
   const susi = S.susi && S.susi.cards && S.susi.cards.length ? `<h4>수시 원서 6장</h4><div class="row" style="font-size:11.5px">${S.susi.cards.map((c) => `${esc(c.univ)}(${esc(c.type)}·${{ up: '상향', fit: '적정', safe: '안정' }[c.tier] || ''})`).join(' · ')}</div>` : '';
   const mates = ['mate1', 'mate2', 'mate3'].map((k, i) => `${imNpcName(E, k, ['도윤', '서아', '하준'][i])} ${'♥'.repeat(Math.max(1, Math.round((S.mates[k] || 40) / 25)))}`).join(' · ');
-  const vocLine = t.id === 'voc' ? `<div class="perk">🏫 한국과학기술고등학교 · AI전자과 · 목표 <b>${esc(imVocGoalName(S.vocGoal))}</b><br>${S.cert ? (S.cert.pass ? `🏅 전자기능사 합격 (실기 ${S.cert.pr}점)` : `🔧 전자기능사 ${S.cert.miss ? '결시' : `불합격 (실기 ${S.cert.pr}점)`} — 정기 검정에서 재도전`) : '🔧 6월 전자기능사 의무검정(실기) 예정'}${S.dongil && S.dongil.cards && S.dongil.cards.length ? `<br>🎓 동일계 원서: ${S.dongil.cards.map((c) => esc(c.univ + ' ' + c.dept)).join(' · ')}` : ''}</div>` : '';
+  const vocLine = t.id === 'voc' ? `<div class="perk">🏫 한국과학기술고등학교 · AI전자과 · 목표 <b>${esc(imVocGoalName(S.vocGoal))}</b><br>${S.cert ? (S.cert.pass ? `🏅 전자기능사 합격 (실기 ${S.cert.pr}점)` : `🔧 전자기능사 ${S.cert.miss ? '결시' : `불합격 (실기 ${S.cert.pr}점)`} — 정기 검정에서 재도전`) : '🔧 6월 전자기능사 의무검정(실기) 예정'}${S.dongil && S.dongil.cards && S.dongil.cards.length ? `<br>🎓 동일계 원서: ${S.dongil.cards.map((c) => esc(c.univ + ' ' + c.dept)).join(' · ')}` : ''}${S.plan && S.plan.n ? `<br>📒 플래너 칭찬 도장 ${S.plan.good}/${S.plan.n}` : ''}</div>${S.vocGoal === 'gong' ? `<h4>공무원 응시자격</h4><div class="perk">${imGongReqs(S).map((r) => `${r.icon} ${esc(r.name)} — <b>${r.ok ? '충족' : '미충족'}</b> <small>(${esc(r.note)})</small>`).join('<br>')}<br>${IMG_ORDER.map((k) => `${IMG_EX[k].icon} ${esc(IMG_EX[k].short)} ${esc(IMG_EX[k].date)} — ${esc(imGongExStatus(S, k))}`).join('<br>')}</div>` : ''}` : '';
   return `${vocLine}<h4>실력 · ${esc(t.name)} · ${esc(t.id === 'voc' ? 'AI전자과' : mj.name)} (${imNth(S)})</h4><div class="sheet" style="padding:4px 2px">${sk}</div>
     <div class="perk">내신 <b>${imNaesinAvg(S).toFixed(2)}</b> (5등급제) · 생기부 <b>${Math.round(S.saeng)}</b> · 번아웃 ${Math.round(S.burnout)}%<br>${esc(imSaengLine(S))}<br>친구 ${mates}</div>
     <h4>내신 기록</h4>${ns ? `<table class="ng"><tr><th>시험</th><th>등급</th><th>평균</th></tr>${ns}</table>` : '<div class="row">고1~고2 1학기 내신만 있어요</div>'}
@@ -9690,7 +10717,7 @@ function imDayStats(forced, E) {
 function imOnDayEnd(forced, E) {
   const S = E.G.S, D = E.G.D;
   if (forced && !D.burnt) S.flags.allnight = true;
-  S.months.push({ nth: S.nth, mi: S.mi, study: D.study || 0, mental: Math.round(S.mental), gain: D.gain || 0 });
+  const sch0 = E.daySched(), mustL = sch0.filter((x) => x.must && x.loc && x.kind !== 'meal'); S.months.push({ nth: S.nth, mi: S.mi, study: D.study || 0, mental: Math.round(S.mental), gain: D.gain || 0, plan: mustL.filter((x) => /class|prac|ebs|cbt|naesin|suhaeng|yaja|academy|jaejong|study/.test(x.kind)).reduce((a, x) => a + (x.e - x.s), 0), att: mustL.filter((x) => D.done[x.id] && D.done[x.id] !== 'miss').length, tot: mustL.length, minis: (D.accs || []).length, miss: (D.log && D.log.miss) || 0 });
   if (S.months.length > 40) S.months.shift();
 }
 function imBriefHTML(d, E) {
@@ -9733,10 +10760,10 @@ function imScore(E) {
   const S = E.G.S, sk = Object.values(S.sk);
   const base = sk.reduce((a, z) => a + z, 0) / Math.max(1, sk.length) * 10;
   const cs = S.csat && S.csat.R ? S.csat.R.avgPct * 20 : 0;
-  const pass = ['hakjong', 'gyogwa', 'jungsi', 'chuhap', 'susi', 'vocjob', 'vocdongil', 'vocjungsi'].includes(S.final);
+  const pass = ['hakjong', 'gyogwa', 'jungsi', 'chuhap', 'susi', 'vocjob', 'vocdongil', 'vocjungsi', 'gonggun', 'gongedu', 'gongnat'].includes(S.final);
   return Math.round(base + cs + (pass ? 3000 : 0) + S.album.length * 20 + S.saeng * 5 + (5 - imNaesinAvg(S)) * 200 - (S.nth - 1) * 300);
 }
-const IMC_PASS = { hakjong: 1, gyogwa: 1, jungsi: 1, chuhap: 1, susi: 1, vocjob: 1, vocdongil: 1, vocjungsi: 1, vocretry: 1 }; // vocretry 는 재수 버튼 없음 (다른 길 안내)
+const IMC_PASS = { hakjong: 1, gyogwa: 1, jungsi: 1, chuhap: 1, susi: 1, vocjob: 1, vocdongil: 1, vocjungsi: 1, vocretry: 1, gonggun: 1, gongedu: 1, gongnat: 1, gong1st: 1, gongreq: 1, gongnext: 1 }; // vocretry 는 재수 버튼 없음 (다른 길 안내)
 function imFinalHTML(E, o) {
   const S = E.G.S, t = imTrackOf(E), mj = imMajorOf(E), esc = E.esc, R = S.csat && S.csat.R;
   const sn = S.name ? `${S.name}, ` : '';
@@ -9759,6 +10786,7 @@ function imFinalHTML(E, o) {
     vocdongil: ['동일계 특별전형 합격', `${sn}${univ} 특성화고교졸업자 전형(정원외) 합격. AI전자과 3년이 전공의 첫 줄이 됐다.`, '🎓'],
     vocjungsi: ['직탐 정시 합격', `${sn}${univ} ${pc.gun || ''}군 정시 합격${pc.chuhap ? '(추가 합격)' : ''}. 성공적인 직업생활 한 과목과 EBS 자기주도학습실의 밤 9시가 만든 결과.`, '🌸'],
     vocretry: ['다시, 내 속도로', S.vocGoal === 'dongil' ? '동일계 원서는 이번엔 닿지 않았다. 전문대 추가모집, 먼저 일하고 재직자 전형 — 길은 하나가 아니다. 자격증과 실습 기록은 그대로 남는다.' : '졸업 전에 취업이 확정되진 않았다. 학교 취업지원관과 다음 공고를 함께 본다. 기능사 자격증과 실습 기록, 성실한 출결은 그대로 내 이력서다.', '🌱'],
+    ...imGongEndK(S, sn),
   }[S.final] || ['1년 끝', '', '📷'];
   const alb = S.album.filter((a) => a.nth === S.nth), album = alb.length > 9 ? alb.slice(0, 3).concat(alb.slice(-6)) : alb;
   const pol = album.map((a, i) => `<div style="background:#FFFDF4;color:#1B2340;border-radius:4px;padding:6px 5px 8px;box-shadow:0 4px 10px rgba(0,0,0,.35);transform:rotate(${((i * 37) % 9) - 4}deg);min-width:0"><div style="background:#2A3358;border-radius:2px;height:46px;display:grid;place-items:center;font-size:26px">${a.icon}</div><div style="font-size:9.5px;font-weight:800;margin-top:4px;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere">${esc(a.text)}</div><div style="font-size:8.5px;color:#6A7393">${esc(a.label)}</div></div>`).join('');
@@ -9767,6 +10795,7 @@ function imFinalHTML(E, o) {
     rows.push(`<div>🏫 한국과학기술고등학교 AI전자과 · 목표 ${esc(imVocGoalName(S.vocGoal))}</div>`);
     rows.push(S.cert ? (S.cert.pass ? `<div>🏅 <b>전자기능사 합격</b> — 의무검정 실기 ${S.cert.pr}점</div>` : `<div>🔧 전자기능사 ${S.cert.miss ? '결시' : `불합격 (실기 ${S.cert.pr}점)`} — 정기 검정에서 재도전</div>`) : '<div>🔧 전자기능사 — 응시 전</div>');
     if (S.final === 'vocjob') rows.push('<div style="font-size:11.5px">📌 선취업 후진학: 3년 재직하면 「특성화고졸 재직자 전형(정원외)」으로 일하면서 대학도 갈 수 있다.</div>');
+    if (S.vocGoal === 'gong' || S.gong) imGongFinalRows(E, rows);
     if (S.dongil && S.dongil.results) rows.push(`<div style="font-size:11.5px">동일계 ${S.dongil.results.map((x) => `${esc(x.univ)} ${esc(x.dept)} ${IMC_RES_TXT[x.res] ? IMC_RES_TXT[x.res][0] : ''}`).join(' · ')}</div>`);
   }
   if (R) rows.push(`<div>📝 수능 ${esc(imGradeStr(R))} · 백분위 ${R.avgPct}</div>`);
@@ -9777,7 +10806,7 @@ function imFinalHTML(E, o) {
   if (S.susi && S.susi.cards && S.susi.cards.length) rows.push(`<div style="font-size:11.5px">수시 ${S.susi.cards.length}장 · ${(S.susi.results || []).map((x) => `${esc(x.univ)} ${IMC_RES_TXT[x.res] ? IMC_RES_TXT[x.res][0] : ''}`).join(' · ') || '결과 전'}</div>`);
   if (S.jungsi && S.jungsi.cards && S.jungsi.cards.length) rows.push(`<div style="font-size:11.5px">정시 ${(S.jungsi.results || S.jungsi.cards).map((x) => `${x.gun}군 ${esc(x.univ)}${x.res ? ' ' + (IMC_RES_TXT[x.res] || [''])[0] : ''}`).join(' · ')}</div>`);
   const again = !IMC_PASS[S.final] && (t.id !== 'voc' || S.vocGoal === 'jungsi' || S.nth > 1);
-  const share = `고3 D-day · ${S.name || '나'} · ${t.name} · ${K[0]}${R ? ` · 수능 ${imGradeStr(R)}` : ''}${t.id === 'voc' && S.cert && S.cert.pass ? ' · 🏅전자기능사' : ''} #고3Dday${t.id === 'voc' ? ' #직업계고 #AI전자과' : ' #2028수능'}`;
+  const share = `고3 D-day · ${S.name || '나'} · ${t.name} · ${K[0]}${R ? ` · 수능 ${imGradeStr(R)}` : ''}${t.id === 'voc' && S.cert && S.cert.pass ? ' · 🏅전자기능사' : ''}${S.vocGoal === 'gong' ? ' #특성화고공무원' : ''} #고3Dday${t.id === 'voc' ? ' #직업계고 #AI전자과' : ' #2028수능'}`;
   return `<div class="eb">${S.name ? esc(S.name) + ' · ' : ''}${esc(t.name)} · ${imNth(S)} · ${S.year + 1}학년도 대입</div><h2>${K[2]} ${K[0]}</h2><p class="tag">${esc(K[1])}</p>
     <p class="small" style="margin:4px 0 0">📷 ${esc(imName(S) === '나' ? '나의' : imName(S) + '의')} ${S.nth > 1 ? esc(imNth(S)) : '고3'} 앨범</p>
     <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 4px 6px">${pol || '<div>사진 없음</div>'}</div>
@@ -9857,7 +10886,7 @@ function imBegin(E, o) {
   S.examNo = String(10000000 + Math.floor(Math.random() * 89999999)).slice(0, 8);
   imSetupTrack(E, S);
   imApplyStart(E, S, P.start || 0);
-  if (S.track === 'voc') imVocApplyStart(E, S);
+  if (S.track === 'voc') { imVocApplyStart(E, S); imGongApplyStart(E, S); }
   imSchedCache.key = '';
   E.buildMap();
   E.G.dayIdx = S.startMi; E.G.D = null;
@@ -9974,26 +11003,30 @@ function imVocSched(E, mi) {
   if (mi === IM_MI.JUN) L.push(imB('16:00', 30, 'consult', '의무검정 후 진로 상담', 'door:staff', { sub: '2학기 계획' }));
   if (mi === IM_MI.MAY) L.push(imB('16:40', 20, 'event', '의무검정 원서 접수 확인', 'door:staff', { must: false, sub: '5월 중순 접수 (예정)' }));
   L.push(dinner(), ebs());
+  imVocAddCoach(E, mi, L); // 담임 방과후 자격증 지도 (g3-gong.js)
   return imFinish(E, L);
 }
 function imVocArrive(E, s, late, hr) {
-  const S = E.G.S, done = () => imSlotDone(E, s), nm = imName(S) === '나' ? '' : imName(S) + ', ';
+  const S = E.G.S, done0 = () => imSlotDone(E, s), nm = imName(S) === '나' ? '' : imName(S) + ', ';
+  const done = () => imVocPlanner(E, s, late, done0); // 아침 조회 · 스터디플래너 검사 (g3-gong.js)
   const L = [late ? `${nm}지각이다. 실습은 안전 교육부터라 늦으면 곤란해. 내일은 5분만 일찍!` : E.rnd(['출석 부른다. 오늘 실습은 오후, 보안경 챙겼지?', '창문 좀 열자. 납 냄새 빼고 바람 넣자.', '의무검정 회로도, 쉬는 시간에 한 번씩 그려 봐.', '아침은 먹고 왔지? 오늘도 EBS실 9시까지 힘내자.'])];
   if (S.mi === IM_MI.SEP && S.vocGoal === 'dongil' && !(S.dongil && S.dongil.applied)) L.push('동일계 원서는 오늘 17:50 마감이다. 교무실 상담실 PC 비워 둘게.');
   E.say(L.map((x) => ({ who: hr, text: x })), done);
 }
 function imVocConsult(E, s, done) {
   const S = E.G.S, hr = imHR(E), ns = imNaesinAvg(S), V = imGet('IM_VOC'), nm = imName(S) === '나' ? '' : imName(S) + ', ';
-  const cert = S.cert ? (S.cert.pass ? '전자기능사 합격' : '전자기능사 재도전 필요') : '6월 의무검정 준비 중';
+  const cert = S.cert ? (S.cert.pass ? '전자기능사 합격' : '전자기능사 재도전 필요') : '6월 의무검정 준비 중', gong = S.vocGoal === 'gong', retry = gong && S.mi === IM_MI.JUN && S.cert && !S.cert.pass;
   const intro = [{ who: hr, text: `${nm}진로 이야기 좀 하자. 내신 ${ns.toFixed(2)}, 전공 실력 ${Math.round(S.sk.jeon || 0)}, ${cert}.` },
     { who: hr, text: S.mi === IM_MI.MAR ? '취업, 동일계 진학, 수능(직탐) — 셋 다 좋은 길이야. 지금 목표 그대로 갈래?' : S.mi === IM_MI.JUN ? '의무검정 끝났지? 수고했다. 이제 2학기 계획을 정할 때야.' : '여름 끝나면 원서 시즌이야. 목표 한 번만 더 확인하자.' }];
-  const opts = [{ label: `지금 목표 그대로 (${imVocGoalName(S.vocGoal)})`, sub: '흔들리지 않기 · 멘탈 +', fn: () => { imApply(E, { mental: 5 }, '목표 확정'); done(); } }];
-  V.goals.filter((g) => g.id !== S.vocGoal && !(g.id === 'dongil' && S.mi > IM_MI.SEP)).forEach((g) => opts.push({ label: `${g.icon} ${g.name}(으)로 바꾸기`, sub: g.sub, fn: () => {
-    const from = imVocGoalName(S.vocGoal); S.vocGoal = g.id; S.schedRev = (S.schedRev || 0) + 1; imSchedCache.key = '';
+  if (gong) intro.push({ who: hr, text: retry ? '의무검정은 아쉬웠지만, 7월 정기 기능사 실기로 다시 딸 수 있어. 공무원 응시자격 첫 줄이니까 같이 준비하자.' : `공무원 응시자격 — ${imGongMissing(S).length ? '아직 ' + imGongMissing(S).join(' · ') + '이(가) 남았어.' : '세 개 다 채웠어. 이제 시험만 남았다.'}` });
+  const opts = [{ label: retry ? '공무원 그대로 · 7월 정기 검정 실기 재도전' : `지금 목표 그대로 (${imVocGoalName(S.vocGoal)})`, sub: retry ? '전기기능사 실기 · 응시자격 되찾기' : '흔들리지 않기 · 멘탈 +', fn: () => { if (retry) { imGongSt(S).gisa2 = { want: true, pass: null }; } imApply(E, { mental: 5 }, '목표 확정'); done(); } }];
+  V.goals.filter((g) => g.id !== S.vocGoal && !(g.id === 'dongil' && S.mi > IM_MI.SEP) && !(g.id === 'gong' && S.mi > IM_MI.JUN)).forEach((g) => opts.push({ label: `${g.icon} ${g.name}(으)로 바꾸기`, sub: g.sub, fn: () => {
+    const from = imVocGoalName(S.vocGoal), f0 = S.vocGoal; S.vocGoal = g.id; imGongOnGoal(E, f0, g.id); S.schedRev = (S.schedRev || 0) + 1; imSchedCache.key = '';
     imAlbum(E, '🔀', `${from} → ${g.name}`); imMental(E, -2);
     E.say([{ who: '나', text: `${g.name}. 이제 이 길로 간다.` }, { who: hr, text: '좋아. 어느 길이든 쌤이 같이 볼게.' }], done);
   } }));
-  E.say(intro, () => imChoice(E, { id: 'vocConsult', title: s.title, sub: '교무실 · 담임 상담', who: hr, text: `내신 <b>${ns.toFixed(2)}</b> · 전공 <b>${Math.round(S.sk.jeon || 0)}</b> · ${E.esc(cert)}`, opts }));
+  const ask = () => imChoice(E, { id: 'vocConsult', title: s.title, sub: '교무실 · 담임 상담', who: hr, text: `내신 <b>${ns.toFixed(2)}</b> · 전공 <b>${Math.round(S.sk.jeon || 0)}</b> · ${E.esc(cert)}${gong ? ` · 응시자격 ${imGongBadges(S)}` : ''}`, opts });
+  E.say(intro, () => (gong ? imCard(E, imGongCheckHTML(E, '📋 응시자격 체크리스트', `${imMonthLabel(S.mi)} 담임 상담 · 공무원(특성화고 전형)`), ask) : ask()));
 }
 function imVocLate(E, s) { const S = E.G.S; S.flags.tardy = (S.flags.tardy || 0) + 1; imApply(E, { mental: -3 }, 'EBS실 지각 · 출석 태그 늦음'); }
 function imVocPracMini(E, o) {
@@ -10028,6 +11061,7 @@ function imVocEbsLecture(E, key) {
 }
 function imVocSelf(E, where, slot) {
   const S = E.G.S, m = E.G.min;
+  if (S.vocGoal === 'gong' && S.mi < IM_MI.DEC) return imGongSelf(E, where, slot);
   if (S.mi >= IM_MI.DEC) return E.say([{ who: '나', text: 'EBS실 창가 내 자리. 오늘은 인사만 하고 나왔다.' }], () => imApply(E, { mental: 3, min: 10 }, 'EBS실 인사'));
   if (S.mi === IM_MI.CSAT && imTakesCsat(S)) return E.say([{ who: '나', text: '오늘은 수능날. 자습은… 이제 안 해도 된다.' }]);
   if (where === 'library' && imIsVac(S, S.mi) && m >= E.T('18:00')) return E.say([{ who: 'EBS실', text: '「방학 중 운영 09:00~18:00」 — 문이 잠겨 있다.' }, { who: '나', text: '오늘은 집에서 마저 하자.' }]);
@@ -10062,7 +11096,7 @@ function imVocGisaAt(E, s, late) {
     imSlotDone(E, s);
     const jeon = S.sk.jeon || 40, fc = imVocForce();
     let pr = Math.round(E.clamp(100 * (0.62 * sc + 0.38 * jeon / 100) - (late ? 5 : 0) - (S.mental < 30 ? 4 : 0), 0, 100));
-    if (fc.gisa === 'pass') pr = Math.max(pr, 72); if (fc.gisa === 'fail') pr = Math.min(pr, 48);
+    if (fc.gisa === 'pass') pr = Math.max(pr, 72); if (fc.gisa === 'fail' || fc.gisa === 'retry') pr = Math.min(pr, 48);
     const pass = pr >= 60;
     S.cert = { name: '전자기능사', pass, pr, mi: S.mi };
     imGain(E, 'jeon', 2 + 3 * sc);
@@ -10153,6 +11187,7 @@ function imVocIntro(E, mi, first) {
     else L.push({ who: '나', text: `${o.label}. 목표는 ${imVocGoalName(S.vocGoal)}.` }, { who: '엄마', text: `${imVoc(S)}, 아침은 먹고 가.` }, tut);
   }
   if (mi === IM_MI.CSAT && imTakesCsat(S)) return L.concat([{ who: '나', text: '오늘이다. 2028학년도 수능 — 입실 마감 08:10. 4교시 탐구는 직업탐구.' }, { who: '나', text: '수험표, 신분증, 아날로그 시계, 엄마 도시락. 늦으면 1년이 끝이다.' }]);
+  if (S.vocGoal === 'gong') { imGongIntro(E, mi, L); return L; }
   if (mi === IM_MI.CSAT) L.push({ who: '나', text: '오늘은 수능날. 시험 보는 친구는 시험장으로, 나는 학교로. 2학기 기말이다.' });
   if (mi === IM_MI.JUN) L.push({ who: '나', text: '오늘은 전자기능사 의무검정. 회로도는 눈 감고도 그린다.' });
   if (IMC_VAC[mi]) L.push({ who: '나', text: '방학이지만 등교. EBS 자기주도학습실 09시, 오후엔 실습실.' });
@@ -10174,12 +11209,14 @@ function imVocBriefExtra(E, d, sch, extra) {
   if (has('consult')) extra.push('교무실 담임 상담 — 진로 목표(취업 · 동일계 · 수능)를 바꿀 수도 있다.');
   if (mi === IM_MI.SEP && S.vocGoal === 'dongil' && !(S.dongil && S.dongil.applied)) extra.push('⚠ 동일계 원서 마감 17:50 — 교무실 상담실 PC에서 3장 (동일계열 학과만).');
   if (mi === IM_MI.CSAT && imTakesCsat(S)) extra.push('입실 마감 08:10! 알람 → 준비물 → 버스 → 시험장.', '1교시 국어 → 2교시 수학 → 점심 → 3교시 영어 → 4교시 한국사·직업탐구 → OMR');
-  if (mi === IM_MI.DEC) extra.push(S.vocGoal === 'dongil' ? '수시 발표 — 특성화고교졸업자 전형 3장.' : S.vocGoal === 'jungsi' ? '수능 성적 통지 · 정시 원서(가·나·다).' : '졸업 작품 전시회 · 졸업까지 두 달.');
-  if (mi === IM_MI.LAST) extra.push(S.vocGoal === 'jungsi' ? '정시 발표 · 졸업식.' : '졸업식 · 그리고 내 다음 길.');
+  if (S.vocGoal === 'gong') imGongBrief(E, d, sch, extra);
+  if (mi === IM_MI.DEC) extra.push(S.vocGoal === 'gong' ? '교육청 최종 · 지역인재 1차 발표 → 지역인재 면접 · 졸업 작품 전시회.' : S.vocGoal === 'dongil' ? '수시 발표 — 특성화고교졸업자 전형 3장.' : S.vocGoal === 'jungsi' ? '수능 성적 통지 · 정시 원서(가·나·다).' : '졸업 작품 전시회 · 졸업까지 두 달.');
+  if (mi === IM_MI.LAST) extra.push(S.vocGoal === 'jungsi' ? '정시 발표 · 졸업식.' : S.vocGoal === 'gong' ? '졸업식 · 그리고 첫 출근(합격한 곳이 여럿이면 하나 고르기).' : '졸업식 · 그리고 내 다음 길.');
 }
 function imVocDays(E, ymd) { const S = E.G.S, mi = S.mi, ym = IMC_YM[mi] || IMC_YM[0], frac = E.G.D ? E.clamp((E.G.min - 420) / 1020, 0, 1) : 0; const day = mi === 0 ? 20 + Math.round(frac * 9) : 1 + Math.round(frac * 26); return Math.max(0, Math.round((new Date(ymd[0], ymd[1], ymd[2]) - new Date(ym[0], ym[1], day)) / 86400000)); }
 function imVocDdayText(E) {
   const S = E.G.S, mi = S.mi;
+  if (S.vocGoal === 'gong') return imGongDday(E);
   if (mi >= IM_MI.LAST) return '졸업';
   if (mi < IM_MI.JUN || (mi === IM_MI.JUN && !S.cert)) { const d = imVocDays(E, [2027, 5, 15]); return d > 0 ? `의무검정 D-${d}` : '의무검정 D-DAY'; }
   return `졸업 D-${imVocDays(E, [2028, 1, 10])}`;
@@ -10188,7 +11225,7 @@ function imVocApplyStart(E, S) {
   const st = S.startMi || 0;
   S.sk.jeon = st >= IM_MI.SEP ? 62 : st >= IM_MI.JUL ? 58 : st >= IM_MI.MAR ? 47 : 38;
   if (st > IM_MI.JUN) {
-    const fc = imVocForce(), r = imSeed(`${S.examNo}|cert0`), pass = fc.gisa === 'pass' ? true : fc.gisa === 'fail' ? false : r < 0.45 + S.sk.jeon / 200;
+    const fc = imVocForce(), r = imSeed(`${S.examNo}|cert0`), pass = fc.gisa === 'pass' ? true : fc.gisa === 'fail' || fc.gisa === 'retry' ? false : r < 0.45 + S.sk.jeon / 200;
     S.cert = { name: '전자기능사', pass, pr: pass ? 64 + Math.round(r * 20) : 44 + Math.round(r * 14), mi: IM_MI.JUN, pre: true };
     if (pass) imAlbum(E, '🏅', '전자기능사 합격 — 국가기술자격증 첫 장');
   }
@@ -10201,6 +11238,7 @@ function imVocBotPlan(E) {
   if (S.hp < 40 && free > 25) return [L(!vac && m < E.T('16:30') ? 'kiosk' : S.money >= 0.5 ? 'store' : 'living'), '밥'];
   if (S.mental < 32 && free > 40) return [L(S.money >= 0.3 ? 'coinnore' : 'field'), '코노'];
   if (S.mental < 45 && free > 40) return [L('field'), '산책'];
+  const co = E.daySched().find((x) => x.kind === 'coach' && !D.done[x.id] && E.slotOpen(x)); if (co) return [co.loc, '담임 자격증 지도'];
   if (free > 55) {
     if (m >= E.T('08:00') && m < E.T(vac ? '17:00' : '20:50')) return !D.labFree && m < E.T('17:00') && (S.sk.jeon || 0) < 85 ? ['door:lab', '실습 연습'] : ['door:library', 'EBS 자습'];
     return [L('door:room'), '내 방'];
@@ -10209,6 +11247,7 @@ function imVocBotPlan(E) {
 }
 function imVocBotChoice(E, o) {
   const S = E.G.S, D = E.G.D || {}, id = o.id;
+  if (id === 'vocGong' || id === 'vocGongAccept') return imGongBotChoice(E, o);
   if (id === 'vocSelf') { if (S.hp < 28) return 5; D.vsN = (D.vsN || 0) + 1; const R = S.vocGoal === 'jungsi' ? [2, 0, 2, 3] : [1, 0, 1, 3]; return R[(D.vsN + S.mi) % R.length]; }
   return 0;
 }
@@ -10218,7 +11257,7 @@ function imVocPickCard(E) {
   E.showCard(`<div class="eb">새 1년 · 2/4 · 🔧 직업계고</div><h2>학과 · 진로 목표</h2>
     <div class="rdesc" style="margin-top:8px"><b>🏫 ${esc(V.school)} · ${esc(V.dept)}</b> <span style="font-size:11px;color:var(--ink-2)">(학과 고정)</span><br>${esc(V.deptDesc)}</div>
     <p class="small" style="margin:8px 2px 2px;text-align:left">졸업 후 목표 — 담임 상담에서 바꿀 수 있어요</p>
-    <div class="rsel" style="grid-template-columns:repeat(3,minmax(0,1fr))">${V.goals.map((g) => `<button type="button" data-go="im-goal" data-v="${g.id}" class="${P.goal === g.id ? 'on' : ''}"><b>${g.icon}</b>${esc(g.name)}<small>${esc(g.sub)}</small></button>`).join('')}</div>
+    <div class="rsel" style="grid-template-columns:repeat(${V.goals.length > 3 ? 2 : 3},minmax(0,1fr))">${V.goals.map((g) => `<button type="button" data-go="im-goal" data-v="${g.id}" class="${P.goal === g.id ? 'on' : ''}"><b>${g.icon}</b>${esc(g.name)}<small>${esc(g.sub)}</small></button>`).join('')}</div>
     <div class="rdesc"><b>${cur.icon} ${esc(cur.name)}</b><br>${esc(cur.desc)}</div>
     <div class="col"><button class="btn" type="button" data-go="im-step" data-v="3">이름·성별 ▶</button><button class="btn sub" type="button" data-go="im-step" data-v="1">◀ 입시 전략</button></div>`);
 }
@@ -10288,6 +11327,7 @@ window.IMGO_GAME = {
     }
     if (s.kind === 'mock' && typeof s.part === 'string') { const D = E.G.D; D.mockParts = D.mockParts || {}; D.mockParts[s.part] = 0.1; imApply(E, { mental: -6 }, `${s.title} 결시`); if (!imPartsLeft(E, 'mock', s)) E.whenFree(() => { const R = imMockFinalize(E, s.exam || s.title, s.mk || '학평'); if (R) imMockCard(E, R, s.exam || s.title, s.mk || '학평'); }); return; }
     if (s.kind === 'gisa') { S.cert = { pass: false, miss: true, pr: 0 }; imApply(E, { mental: -15 }, '의무검정 결시'); return; }
+    if (imGongSlotMiss(E, s)) return;
     if (s.must && S.track === 'voc') S.flags.vocMiss = (S.flags.vocMiss || 0) + 1;
     if (s.kind === 'arrive') { S.flags.tardy = (S.flags.tardy || 0) + 1; imApply(E, { mental: -3 }, '무단 지각 · 벌점'); return; }
     imApply(E, { mental: -4, saeng: s.kind === 'class' || s.kind === 'suhaeng' ? -1 : 0 }, `${s.title} 놓침`);
@@ -10317,6 +11357,16 @@ window.IMGO_GAME = {
       case 'ebs': imSlotDoneSoft(E, s); if (late) imVocLate(E, s); return imVocSelf(E, 'library', s);
       case 'gisa': return imVocGisaAt(E, s, late);
       case 'cbt': return imVocCbtAt(E, s, late);
+      case 'coach': return imVocCoachAt(E, s);
+      case 'gongexam': return imGongExam(E, s);
+      case 'gongres': return imGongReveal(E, s);
+      case 'gongprep': return imGongPrep(E, s);
+      case 'gongiv': return imGongIv(E, s);
+      case 'hanguk': return imGongHanguk(E, s);
+      case 'comfil': case 'comsil': return imGongComExam(E, s);
+      case 'gisa2': return imGongGisa2(E, s);
+      case 'chucheon': return imGongChucheon(E, s);
+      case 'principal': return imGongPrincipal(E, s);
       default: return imEventSlot(E, s);
     }
   },
