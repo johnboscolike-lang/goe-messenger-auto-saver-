@@ -4788,7 +4788,7 @@ function imTicketMini(E, opts = {}) {
     g.save(); g.translate(x + w - 40, y + h - 34); g.rotate(-0.2); g.strokeStyle = 'rgba(210,59,46,.85)'; g.lineWidth = 2.5; g.beginPath(); g.arc(0, 0, 22, 0, 7); g.stroke();
     g.fillStyle = 'rgba(210,59,46,.85)'; g.font = `11px ${E.FD}`; g.textAlign = 'center'; g.fillText('평가원', 0, -2); g.fillText('직인', 0, 11); g.restore();
     g.restore();
-    g.globalAlpha = 1; g.fillStyle = E.C.chalk; g.textAlign = 'center'; E.fitText('수능 D-day', VW - 40, 32, E.FD); g.fillText('수능 D-day', VW / 2, y - 12);
+    g.globalAlpha = 1; g.fillStyle = E.C.chalk; g.textAlign = 'center'; E.fitText(opts.head || '수능 D-day', VW - 40, 32, E.FD); g.fillText(opts.head || '수능 D-day', VW / 2, y - 12);
   };
   return m;
 }
@@ -6555,7 +6555,7 @@ function imWonseoMini(E, opts = {}) {
     },
     tap(p, now) { this.input(p.x < E.VW / 2 ? 'left' : 'right', now); },
     // 봇: 상향·적정·안정 2장씩 · 최저 못 맞추는 카드는 피함 · 남은 카드가 빈칸 수와 같으면 무조건 넣기
-    want(c) { const left = deck.length - this.i, slots = NEED - this.chosen.length; if (left <= slots) return true; return this.mix[c.tier] < 2 && (c.minOk || left - 1 < slots); },
+    want(c) { const left = deck.length - this.i, slots = NEED - this.chosen.length, W = opts.want || {}; if (left <= slots) return true; return this.mix[c.tier] < (W[c.tier] ?? 2) && (c.minOk || left - 1 < slots); },
     auto() { if (this.phase === 'end') { this.input('up', E.clockNow()); return; } if (this.phase !== 'card') return; const c = this.cur(); if (c) this.input(this.want(c) ? 'right' : 'left', E.clockNow()); },
     draw(st, b, now) {
       const g = E.g, VW = E.VW, VH = E.VH, bot = VH - E.padV;
@@ -6968,6 +6968,903 @@ function imGisaPracMini(E, opts = {}) {
     },
   };
   return m;
+}
+
+/* ===== g3-late.js ===== */
+/* g3-late.js — 고3 하반기 에피소드 확장 (8월 ~ 2월 · 일반고 루트 hakjong | gyogwa | jungsi) · research.md §8
+   - 직업계고(voc)는 건드리지 않는다: 모든 훅은 imLateOn(S) (= track !== 'voc') 일 때만.
+   - build.py 순서: data → map → minis → late → core (여기 최상위 코드는 data·minis 만 읽는다. core 함수는 실행 시점에 부른다)
+   - 봇 훅: window.__im.force.late = ['queue', 'save', …] — imbot-run.js 의 LATEEP=queue,save,… (목록은 IML_FLAGS)
+   - 새 미니(봇 auto 있음): imLateNoteMini(설명 카드) · imQueueMini(원서 접속 대기) · imDeadlineMini(마감 직전 결제) · imNonsulMini(논술 답안)
+     imCutMini(예상 등급컷 새로고침) · imMinCheckMini(수능 최저 판정) · imWaitMini(예비 번호 → 추합 전화) */
+
+const IML_FLAGS = {
+  queue: '원서 접수 사이트 접속 대기 길게 (마감일 몰림)',
+  save: '원서 1장 「저장만」 → 17:52 결제 위기 → 성공', savefail: '같은 위기 → 마감 넘김 (1장 놓침)', nosave: '저장 위기 없음',
+  nonsul: '10월 원정 논술(수능 전) 강제', noscout: '예비소집 뒤 시험장 안 가 봄 → 수능날 시험장 착각',
+  oversleep: '수능날 늦잠', ticket: '수험표 두고 나옴 → 시험관리본부 재발급', ticketback: '수험표 두고 나옴 → 집으로 되돌아감',
+  id: '신분증 두고 나옴 → 본부 신고 · 임시 신분증', police: '도로 정체 → 112 순찰차', bike: '도로 정체 → 경찰 오토바이 에스코트',
+  phone: '1교시 전 휴대폰 제출 위기', skipexam: '수능 후 논술/면접 결시(최저 걱정)', susiwait: '상향 1장 예비 번호', susipass: '안정 1장 합격',
+  susifail: '수시 전부 불합격', regno: '수시 합격했지만 등록 안 함(재수)', callmiss: '추합 전화 첫 통 부재중 → 다시 걸려 옴',
+};
+const IML_SITE = '원서로';
+function imLateOn(S) { return !!S && !!S.track && S.track !== 'voc'; }
+function imLF(k) { const w = typeof window !== 'undefined' ? window.__im : null; const L = w && w.force && w.force.late; return !!(L && [].concat(L).includes(k)); }
+function imLateSt(S) { if (!S.late || S.late.nth !== S.nth) S.late = { nth: S.nth }; return S.late; }
+function imLateTimer(E, at, fn) { const D = E.G.D; if (!D) return; (D.lateT = D.lateT || []).push({ t: typeof at === 'string' ? E.T(at) : at, fn }); }
+function imLateTick(E) {
+  const G = E.G, D = G.D; if (!D || !D.lateT || G.mode !== 'world') return;
+  D.lateT.filter((x) => !x.fired && G.min >= x.t).forEach((x) => { x.fired = 1; E.whenFree(() => x.fn(E)); });
+}
+function imLateSeq(fns, done) { let i = 0; const go = () => { if (i < fns.length) fns[i++](go); else if (done) done(); }; go(); }
+const imLateCall = (S) => (imName(S) === '나' ? '야' : imGiven(imName(S)));
+function imLateDate(S, m, d) { const dt = new Date(S.year + (m < 6 ? 1 : 0), m - 1, d); return `${m}/${d}(${'일월화수목금토'[dt.getDay()]})`; }
+function imLateTierTxt(t) { return { up: '상향', fit: '적정', safe: '안정' }[t] || ''; }
+function imLateFee(c) { return /논술/.test(c.type || '') ? 6.5 : /학종|종합/.test(c.type || '') ? 5.5 : 4; } // 만원 · (추정) 대학·전형마다 다름
+
+/* ---------- 0. 데이터 보강 (사건 · 달 사건 목록) ---------- */
+const IML_EVENTS = {
+  susiNapchi: {
+    who: '도윤', npc: 'mate1', loc: 'cafeteria', tag: 'friend', title: '「수시납치」 걱정', mi: [9, 9], only: ['hakjong', 'gyogwa', 'jungsi'], nth: 1,
+    lines: [
+      ['도윤', '(급식 줄에서) 야, 수시 안정 너무 낮게 쓰지 마. 붙으면 그냥 끝이야.'],
+      ['도윤', '수시 합격하면 등록 안 해도 정시 못 써. 그게 「수시납치」.'],
+      ['me', '(8모 잘 봐서 수능 대박 나면…? 근데 수능 망하면…? 머리가 두 개였으면.)'],
+    ],
+    choices: [
+      { t: '안정 카드도 「진짜 갈 곳」만 쓰기', cost: { min: 5 }, gain: { mental: 4, flag: 'napchiSafe' }, result: '납치당해도 웃으면서 갈 수 있는 곳만. 그게 안정이다.' },
+      { t: '그래도 보험 한 장은 필요해', cost: { min: 5 }, gain: { mental: 2, flag: 'napchiIns' }, result: '도윤이가 끄덕였다. "그래, 그것도 맞아. 정답은 없지."' },
+    ],
+  },
+  parentsClash: {
+    who: '가족 단톡', loc: 'room', tag: 'family', title: '엄마 vs 아빠, 원서 6장', mi: [9, 9], only: ['hakjong', 'gyogwa', 'jungsi'], nth: 1, run: (E) => imLateParents(E),
+  },
+  compRate: {
+    who: '하준', npc: 'mate3', loc: 'library', tag: 'friend', title: '실시간 경쟁률', mi: [10, 10], only: ['hakjong', 'gyogwa', 'jungsi'], nth: 1,
+    lines: [
+      ['하준', '(단톡) 우리 과 경쟁률 오늘 아침 12:1 → 마감 직전 27:1 됐대. 다들 눈치게임 ㅋㅋ'],
+      ['서아', '(단톡) 경쟁률 보지 마. 숫자 보면 잠 못 잔다. 우린 이미 냈어!'],
+      ['me', '(접수번호 캡처 여섯 장… 아니 다섯 장? 아니 여섯 장. 다시 확인했다.)'],
+    ],
+    choices: [
+      { t: '경쟁률 앱 지우고 수능특강', cost: { min: 40 }, gain: { study: 3, sk: 'any', mental: 2 }, result: '수시는 이제 내 손을 떠났다. 남은 건 수능.' },
+      { t: '단톡에 응원 이모티콘 폭탄', cost: { min: 10 }, gain: { mental: 7 }, result: '"다 붙자" 서른 개. 단톡방이 잠깐 따뜻해졌다.' },
+    ],
+  },
+  cheerNote: {
+    who: '서아', npc: 'mate2', loc: 'classroom', tag: 'friend', title: '책상 속 응원 쪽지', mi: [11, 11], only: ['hakjong', 'gyogwa', 'jungsi'], nth: 1,
+    lines: [
+      ['me', '점심 먹고 오니 책상 서랍에 포스트잇 세 장.'],
+      ['서아', '(쪽지) 「D-30. 넌 이미 충분히 해 왔어. 수능 끝나고 떡볶이!」'],
+      ['하준', '(쪽지) 「수학 30번은 버려도 된다. 29개를 지키자. — 하준」'],
+      ['도윤', '(쪽지) 「짝꿍아 수능날 도시락 반찬 공유 금지(시험장 달라서) ㅋㅋ 화이팅」'],
+    ],
+    choices: [
+      { t: '답장 쪽지 세 장 쓰기', cost: { min: 15 }, gain: { mental: 10, flag: 'cheerBack' }, result: '「우리 넷 다 웃으면서 졸업하자.」 쪽지가 한 바퀴 돌았다.' },
+      { t: '필통 안쪽에 붙여 두기', cost: { min: 3 }, gain: { mental: 7, flag: 'cheerKeep' }, result: '수능날 필통을 열면 제일 먼저 보이게.' },
+    ],
+  },
+  ivStudy: {
+    who: '서아', npc: 'mate2', loc: 'classroom', tag: 'study', title: '면접 예상질문 스터디', mi: [11, 11], only: ['hakjong', 'gyogwa'], nth: 1,
+    lines: [
+      ['서아', '점심시간 15분만! 서로 생기부 바꿔 보고 꼬리 질문하기.'],
+      ['서아', '"이 탐구에서 실패한 부분은? 그걸 다시 한다면?" …자, 대답해 봐.'],
+      ['me', '(외운 문장 말고, 내가 실제로 한 이야기로.)'],
+    ],
+    choices: [
+      { t: '내 생기부 세 줄을 내 말로 설명', cost: { min: 15 }, gain: { saeng: 2, mental: 3, flag: 'ivStudy' }, result: '"오, 그 대답 좋다." 서아가 메모했다. 서로의 면접관이 되어 준 15분.' },
+      { t: '서아 생기부로 질문 만들어 주기', cost: { min: 15 }, gain: { mental: 5, saeng: 1, flag: 'ivStudy' }, result: '남의 생기부를 읽다 보니 내 생기부의 빈칸도 보였다.' },
+    ],
+  },
+};
+(function imLatePatchData() {
+  try {
+    Object.assign(IM_EVENTS, IML_EVENTS);
+    const M = IM_MONTHS, add = (i, list) => { if (M[i]) M[i].events = (M[i].events || []).concat(list); };
+    if (M[9]) M[9].events = (M[9].events || []).filter((x) => !/^wonseoPlan@/.test(x)); // 8월 상담은 imLateAugConsult 가 맡는다
+    add(9, ['susiNapchi@12:20', 'parentsClash@21:50']);
+    if (M[10]) {
+      M[10].events = (M[10].events || []).filter((x) => !/^wonseoNight@/.test(x)).concat(['compRate@21:30']);
+      M[10].label = '수시 원서 마지막 날 (6장)';
+      M[10].goal = '원서 접수 마지막 날(9/23)! 6장 결제까지 끝내야 접수 완료.';
+      M[10].brief = ['수시 원서 접수 마지막 날 (9/20~9/23). 일반대는 최대 6장.', '마감 시각은 대학마다 달라 — 우리 6장은 오늘 18:00.', '「저장」만 하면 접수가 아니다. 결제 → 접수번호까지.'];
+    }
+    add(11, ['cheerNote@12:15', 'ivStudy@12:40']);
+  } catch (e) { /* 데이터 없음 */ }
+})();
+
+/* ---------- 1. 미니: 설명 카드 (영상용 · 여러 줄) ---------- */
+// o = { kicker, icon, title, lines[], foot, bg, cfg, sec, color, style, sfx, shake, stamp, stampCol }
+function imLateNoteMini(E, o = {}) {
+  const fin = imMnFin(E, o), C = E.C, SEC = o.sec || 4.6;
+  const m = {
+    type: 'imNote', bpm: o.bpm || 100, style: o.style === undefined ? null : o.style, cfg: o.cfg || {}, noFail: true, title: o.title || '', kt: o.title || '', pad: null,
+    enter() { if (o.sfx && E.sfx[o.sfx]) E.sfx[o.sfx](); if (o.shake) E.shake(o.shake); },
+    update(dt, st) { if (st >= SEC && !this.done) { this.done = true; fin(1, this); } },
+    input(d, now) { if (now - this.t0 > 1.4 && !this.done) { this.done = true; fin(1, this); } },
+    tap(p, now) { this.input('up', now); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH, k = E.clamp(st / 0.35, 0, 1);
+      imMnBG(E, o.bg || 'bedroom', this, b, now);
+      g.fillStyle = 'rgba(10,12,24,.42)'; g.fillRect(0, 0, VW, VH);
+      const x = 16, w = VW - 32, font = `800 13.5px ${E.FB}`;
+      const lines = [].concat(...(o.lines || []).map((l) => E.wrapText(String(l), w - 36, font, 4)));
+      const h = 96 + lines.length * 19 + (o.foot ? 22 : 0), bot = VH - (E.padV || 0) - 14;
+      const y = E.clamp(Math.max(104, VH * 0.2), 104, Math.max(104, bot - h));
+      g.save(); g.globalAlpha = k; g.translate(0, (1 - k) * 18);
+      imMnPaper(E, x, y, w, h, '#FFFDF4', 14);
+      g.fillStyle = o.color || C.info; E.rr(x, y, w, 8, 4); g.fill();
+      if (o.kicker) { g.fillStyle = '#6A7393'; g.font = `800 11.5px ${E.FB}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, o.kicker, w - 36), x + 18, y + 30); }
+      g.font = `30px ${E.FD}`; g.textAlign = 'left'; g.fillText(o.icon || '📌', x + 14, y + 70);
+      g.fillStyle = '#1B2340'; E.fitText(o.title || '', w - 76, 22, E.FD); g.fillText(o.title || '', x + 58, y + 66);
+      g.font = font; imMnTextLines(E, lines, x + 18, y + 98, 19, '#33405F');
+      if (o.foot) { g.fillStyle = '#8A93AD'; g.font = `800 11px ${E.FB}`; g.textAlign = 'right'; g.fillText(imMnFitStr(E, o.foot, w - 36), x + w - 16, y + h - 12); }
+      g.restore();
+      if (o.stamp && st > 1) imMnStamp(E, o.stamp, VW / 2, Math.min(bot - 40, y + h + 46), E.clamp((st - 1) / 0.3, 0, 1), o.stampCol);
+      if (st > 1.4) { g.fillStyle = 'rgba(255,255,255,.65)'; g.font = `800 11px ${E.FB}`; g.textAlign = 'center'; g.fillText('탭하면 넘어가요', VW / 2, Math.min(VH - 10, bot + 6)); }
+    },
+  };
+  return m;
+}
+
+/* ---------- 2. 미니: 원서 접수 사이트 접속 대기 (↑ F5 누르면 뒤로 밀림) ---------- */
+function imQueueMini(E, o = {}) {
+  const fin = imMnFin(E, o), C = E.C, Q0 = o.queue || 2148, RATE = Q0 / (o.slow ? 8.5 : 5.2), site = o.site || IML_SITE;
+  const m = {
+    type: 'imQueue', bpm: 96, style: 'tense', cfg: {}, noFail: true, phase: 'queue', q: Q0, qMax: Q0, ph0: 0, refreshes: 0, words: 0,
+    pad: [['←', '단어장 한 장'], ['↑ F5', '누르면 뒤로!'], ['→', '물 한 모금']],
+    enter() { E.banner(`「${site}」 접속 대기`, '새로고침(F5) 하면 대기 순번이 맨 뒤로!', true); },
+    update(dt, st) {
+      if (this.phase === 'queue') { this.q -= dt * RATE; if (this.q <= 0) { this.q = 0; this.phase = 'in'; this.ph0 = st; E.sfx.chime(); E.setPad(null); } }
+      else if (this.phase === 'in' && st - this.ph0 > 2 && !this.done) { this.done = true; fin(E.clamp(1 - this.refreshes * 0.25, 0, 1), this); }
+    },
+    input(d, now) {
+      if (this.phase !== 'queue') { if (this.phase === 'in' && now - this.t0 - this.ph0 > 0.8) this.ph0 = now - this.t0 - 2; return; }
+      if (d === 'up') { this.refreshes++; this.q = Math.min(Q0 * 1.3, this.q + Q0 * 0.35); this.qMax = Math.max(this.qMax, this.q); E.sfx.bad(); E.shake(0.2); E.pop(E.VW / 2, E.VH * 0.56, '대기 순번이 뒤로 밀렸다…', C.hot, 16); return; }
+      this.words++; E.sfx.key();
+      E.pop(E.VW / 2 + (d === 'left' ? -70 : 70), E.VH * 0.56, d === 'left' ? E.rnd(['abundant = 풍부한', 'reluctant = 꺼리는', 'inevitable = 불가피한', 'deadline = 마감']) : E.rnd(['꿀꺽 · 침착하자', '숨 크게 한 번', '손 떨지 마']), C.chalk, 14);
+    },
+    tap(p, now) { this.input(p.x < E.VW / 3 ? 'left' : p.x > E.VW * 2 / 3 ? 'right' : 'up', now); },
+    auto() { this._a = (this._a || 0) + 1; if (this.phase === 'queue' && this._a % 3 === 0) this.input(this._a % 2 ? 'left' : 'right', E.clockNow()); else if (this.phase === 'in') this.input('up', E.clockNow()); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH;
+      imMnBG(E, 'bedroom', this, b, now);
+      g.fillStyle = 'rgba(10,12,24,.35)'; g.fillRect(0, 0, VW, VH);
+      imMnHead(E, this.phase === 'queue' ? `「${site}」 접속 대기 · ${Math.ceil(this.q).toLocaleString('ko-KR')}명` : '접속 완료!', this.phase === 'queue' ? 1 - this.q / this.qMax : 1, this.phase === 'queue' ? C.hot : C.act, this.refreshes ? `F5 ${this.refreshes}회` : '마감 18:00');
+      const x = 16, y = 104, w = VW - 32, h = Math.max(230, Math.min(VH * 0.5, VH - E.padV - 210));
+      g.fillStyle = '#2B3156'; E.rr(x - 6, y - 6, w + 12, h + 12, 14); g.fill();
+      g.fillStyle = '#F4F6FA'; E.rr(x, y, w, h, 8); g.fill();
+      g.fillStyle = '#DCE2EE'; E.rr(x, y, w, 28, 8); g.fill(); g.fillRect(x, y + 20, w, 8);
+      ['#FF5C6C', '#FFD54A', '#4FD69C'].forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(x + 14 + i * 14, y + 14, 4.5, 0, 7); g.fill(); });
+      g.fillStyle = '#FFFFFF'; E.rr(x + 60, y + 6, w - 70, 16, 8); g.fill();
+      g.fillStyle = '#6A7393'; g.font = `10px ${E.FB}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, `${site}.co.kr › 2028학년도 수시 › 원서 접수`, w - 90), x + 70, y + 18);
+      const cx = VW / 2, cy = y + 28 + (h - 28) / 2;
+      if (this.phase === 'queue') {
+        g.fillStyle = '#1B2340'; g.font = `15px ${E.FD}`; g.textAlign = 'center'; g.fillText('접속자가 많아 대기 중입니다', cx, cy - 58);
+        g.fillStyle = '#6A7393'; g.font = `800 11px ${E.FB}`; g.fillText('오늘 마감 대학 다수 · 서비스 접속 대기', cx, cy - 40);
+        g.fillStyle = '#C62828'; g.font = `40px ${E.FD}`; g.fillText(`${Math.ceil(this.q).toLocaleString('ko-KR')}명`, cx, cy + 4);
+        g.fillStyle = '#DCE2EE'; E.rr(x + 26, cy + 20, w - 52, 10, 5); g.fill();
+        g.fillStyle = '#3B6FD8'; E.rr(x + 26, cy + 20, (w - 52) * E.clamp(1 - this.q / this.qMax, 0, 1), 10, 5); g.fill();
+        const eta = Math.ceil(this.q / RATE * 9);
+        g.fillStyle = '#4A5675'; g.font = `800 11.5px ${E.FB}`; g.fillText(`예상 대기 ${Math.floor(eta / 60)}분 ${eta % 60}초`, cx, cy + 48);
+        g.fillStyle = 'rgba(255,92,108,.14)'; E.rr(x + 18, cy + 58, w - 36, 24, 8); g.fill();
+        g.fillStyle = '#C62828'; g.font = `800 11px ${E.FB}`; g.fillText(imMnFitStr(E, '⚠ 새로고침 · 뒤로 가기 하면 대기 순번이 초기화돼요', w - 44), cx, cy + 74);
+        for (let i = 0; i < 8; i++) { const a = st * 5 + i * 0.785; g.fillStyle = `rgba(59,111,216,${0.2 + (i / 8) * 0.8})`; g.beginPath(); g.arc(cx + Math.cos(a) * 12, cy - 86 + Math.sin(a) * 12, 3, 0, 7); g.fill(); }
+      } else {
+        g.fillStyle = '#1F7A4D'; g.font = `24px ${E.FD}`; g.textAlign = 'center'; g.fillText('접속 완료 ✓', cx, cy - 10);
+        g.fillStyle = '#4A5675'; g.font = `800 12px ${E.FB}`; g.fillText(imMnFitStr(E, `${o.name ? o.name + ' · ' : ''}로그인 · 원서 작성 화면으로`, w - 30), cx, cy + 18);
+      }
+      const me = imMnMe(E);
+      E.drawFront(VW / 2, VH - E.padV - 16, 0.78, { body: me.body, hair: me.hair, glasses: me.glasses, long: me.pony, pose: 'phone', mood: this.phase === 'in' ? 'calm' : undefined, bob: this.phase === 'in' ? Math.abs(Math.sin(st * 8)) * 5 : 0 });
+    },
+  };
+  return m;
+}
+
+/* ---------- 3. 미니: 마감 직전 결제 (17:57 → 18:00) ---------- */
+function imDeadlineMini(E, o = {}) {
+  const fin = imMnFin(E, o), C = E.C, T = o.time || 10, DIRS = ['left', 'up', 'right'];
+  const steps = [
+    { t: '결제 수단', opts: ['엄마 카드 (일시불)', '계좌이체', '결제 취소'], ans: 0 },
+    { t: '카드 인증번호 6자리', opts: ['다시 받기', '입력 완료', '창 닫기'], ans: 1 },
+    { t: `전형료 ${o.fee || 5}만 원 결제`, opts: ['취소', '보류', '결제 승인'], ans: 2 },
+    { t: '접수번호 확인', opts: ['캡처!', '나중에', '창 닫기'], ans: 0 },
+  ];
+  const padOf = (s) => s.opts.map((x, i) => [DIRS[i] === 'left' ? `← ${i + 1}` : DIRS[i] === 'up' ? `↑ ${i + 1}` : `${i + 1} →`, x]);
+  const m = {
+    type: 'imDeadline', bpm: 140, style: 'urgent', cfg: {}, noFail: true, phase: 'intro', i: 0, s0: 0, pen: 0, ph0: 0, lastStep: 0, ok: false, wrong: 0, pad: null,
+    left(st) { return T - (st - this.s0) - this.pen; },
+    enter() { E.banner('마감 3분 전!', '결제 → 인증 → 승인 → 접수번호', true); },
+    update(dt, st) {
+      if (this.phase === 'intro' && st > 1.1) { this.phase = 'step'; this.s0 = st; this.lastStep = st; E.setPad(padOf(steps[0])); }
+      else if (this.phase === 'step' && this.left(st) <= 0) { this.phase = 'fail'; this.ph0 = st; E.setPad(null); E.sfx.over(); E.shake(0.6); }
+      else if ((this.phase === 'ok' || this.phase === 'fail') && st - this.ph0 > 2.8 && !this.done) { this.done = true; fin(this.ok ? 1 : 0, this); }
+    },
+    input(d, now) {
+      const st = now - this.t0;
+      if (this.phase === 'ok' || this.phase === 'fail') { if (st - this.ph0 > 1.2) this.ph0 = st - 2.8; return; }
+      if (this.phase !== 'step') return;
+      const s = steps[this.i], k = DIRS.indexOf(d);
+      if (k < 0) return;
+      if (k === s.ans) {
+        E.sfx.good(this.i + 1); this.i++; this.lastStep = st;
+        if (this.i >= steps.length) { this.phase = 'ok'; this.ok = true; this.ph0 = st; E.setPad(null); E.sfx.stamp(); E.burst(E.VW / 2, E.VH * 0.4, C.act, 30); }
+        else E.setPad(padOf(steps[this.i]));
+      } else { this.wrong++; this.pen += 1.2; E.sfx.bad(); E.shake(0.25); E.pop(E.VW / 2, E.VH * 0.55, '앗! −1초', C.hot, 18); }
+    },
+    tap(p, now) { this.input(p.x < E.VW / 3 ? 'left' : p.x > E.VW * 2 / 3 ? 'right' : 'up', now); },
+    auto() { const now = E.clockNow(), st = now - this.t0; if (this.phase === 'ok' || this.phase === 'fail') { this.input('up', now); return; } if (this.phase === 'step' && !o.fail && st - this.lastStep > 0.5) this.input(DIRS[steps[this.i].ans], now); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH, bot = VH - E.padV;
+      imMnBG(E, o.bg || 'library', this, b, now);
+      g.fillStyle = 'rgba(10,12,24,.55)'; g.fillRect(0, 0, VW, VH);
+      const left = this.phase === 'step' ? Math.max(0, this.left(st)) : this.phase === 'intro' ? T : this.ok ? Math.max(0, this.left(this.ph0)) : 0;
+      imMnHead(E, `「${IML_SITE}」 결제 대기 1건 · ${this.i}/${steps.length}`, left / T, left / T < 0.3 ? C.hot : C.chalk, this.phase === 'step' ? `${left.toFixed(1)}초` : '');
+      const secs = Math.round((T - left) / T * 160), clk = 17 * 3600 + 57 * 60 + 20 + secs, hh = Math.floor(clk / 3600), mm = Math.floor(clk / 60) % 60, ss = clk % 60;
+      const x = 16, y = 102, w = VW - 32;
+      g.fillStyle = this.phase === 'fail' ? '#FF5C6C' : '#FFD54A'; g.font = `44px ${E.FD}`; g.textAlign = 'center';
+      g.fillText(this.phase === 'fail' ? '18:00:00' : `${hh}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`, VW / 2, y + 44);
+      g.fillStyle = C.ink2; g.font = `800 11.5px ${E.FB}`; g.fillText('마감 18:00:00 · 서버 시각 기준', VW / 2, y + 64);
+      const ph = Math.min(250, bot - y - 96);
+      imMnPaper(E, x, y + 78, w, ph, '#FFFDF4', 12);
+      g.fillStyle = '#1B2340'; g.font = `16px ${E.FD}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, `${o.univ || '○○대'} · 상태: ${this.ok ? '접수 완료' : '작성 중(미결제)'}`, w - 30), x + 14, y + 104);
+      steps.forEach((s, j) => {
+        const yy = y + 126 + j * 30, done = j < this.i, cur = j === this.i && this.phase === 'step';
+        g.fillStyle = done ? '#C9F2DD' : cur ? '#FFF1C2' : '#EEF1F7'; E.rr(x + 12, yy, w - 24, 24, 8); g.fill();
+        g.fillStyle = done ? '#1F7A4D' : '#33405F'; g.font = `800 12.5px ${E.FB}`; g.fillText(`${done ? '✓' : cur ? '▶' : '·'} ${s.t}`, x + 22, yy + 16);
+        if (cur) { g.textAlign = 'right'; g.fillStyle = '#B26A00'; g.fillText('아래 버튼에서 고르기', x + w - 22, yy + 16); g.textAlign = 'left'; }
+      });
+      if (this.phase === 'ok') imMnStamp(E, '접수 완료!', VW / 2, y + 78 + ph / 2 + 10, E.clamp((st - this.ph0) / 0.3, 0, 1), '#1F7A4D');
+      if (this.phase === 'fail') imMnStamp(E, '접수 기간이 아닙니다', VW / 2, y + 78 + ph / 2 + 10, E.clamp((st - this.ph0) / 0.3, 0, 1), '#8A93AD');
+    },
+  };
+  return m;
+}
+
+/* ---------- 4. 미니: 논술 답안 (인문 / 수리) ---------- */
+function imNonsulMini(E, o = {}) {
+  const fin = imMnFin(E, o), math = o.major === 'eng' || o.major === 'med';
+  const raw = math ? [
+    ['[문제 1] 수열의 극한 — 답안 첫 줄은?', '주어진 조건을 식으로 정리', ['답부터 적고 시작', '그래프만 크게 그리기']],
+    ['[문제 2] 미분가능성 증명 — 핵심 출발점은?', '미분계수의 정의 lim (f(a+h)−f(a))/h', ['"자명하다"라고 쓰기', '예시 하나 대입하고 끝']],
+    ['종료 10분 전, 마지막 소문항이 비었다!', '결론 식 먼저 쓰고 남은 시간 검산', ['처음부터 다시 쓰기', '여백에 낙서하며 기도']],
+  ] : [
+    ['[문제 1] 제시문 (가)·(나) 비교 — 첫 문단은?', '두 제시문의 공통 논점을 한 문장으로', ['(가) 문장 그대로 옮기기', '내 경험담으로 시작하기']],
+    ['[문제 2] (다)의 관점으로 (가) 평가 — 근거는?', '(다)의 개념을 (가)의 사례에 적용', ['인터넷에서 본 유명한 명언', '"사람마다 다르다"로 마무리']],
+    ['종료 10분 전, 마지막 문단이 비었다!', '결론 두 문장 먼저 쓰고 퇴고', ['처음부터 다시 쓰기', '여백에 그림 그리기']],
+  ];
+  const items = raw.map(([q, a, w], i) => { const opts = [a].concat(w), order = [[1, 0, 2], [2, 1, 0], [0, 2, 1]][(imMnHash(o.univ || '') + i) % 3]; const os = order.map((k) => opts[k]); return { q, opts: os, ans: os.indexOf(a), tip: a }; });
+  const m = imMnChoiceMini(E, {
+    fin, title: '논술고사', banner: `${o.univ || '대학'} 논술고사`, bannerSub: math ? '수리 논술 · 답안지 한 장의 승부' : '인문 논술 · 원고지 한 장의 승부', bg: 'exam', scene: { board: `논술고사 · ${o.time || '10:00~12:00'}` },
+    style: 'focus', bpm: 96, items, time: 8, reveal: true, endHold: 2.6,
+    headText: (mm) => `논술 답안 · ${Math.min(mm.i + 1, items.length)}/${items.length}`,
+    drawBody(mm) {
+      const g = E.g, VW = E.VW, top = 100, h = Math.max(110, (mm.cardsTop || E.VH * 0.6) - top - 64);
+      imMnPaper(E, 16, top, VW - 32, h, '#FFFDF4', 8);
+      g.strokeStyle = 'rgba(210,59,46,.25)'; g.lineWidth = 1;
+      for (let yy = top + 14; yy < top + h - 6; yy += 16) { g.beginPath(); g.moveTo(26, yy); g.lineTo(VW - 26, yy); g.stroke(); }
+      const filled = Math.min(1, (mm.i + (mm.phase === 'fb' ? 1 : 0)) / items.length), rows = Math.floor((h - 20) / 16 * filled);
+      g.fillStyle = '#33405F';
+      for (let r = 0; r < rows; r++) { const ww = (VW - 70) * (0.55 + 0.4 * ((imMnHash(String(r)) % 10) / 10)); g.fillRect(30, top + 6 + r * 16, ww, 2.4); }
+      const it = mm.cur();
+      if (it && mm.phase !== 'end') { g.fillStyle = 'rgba(15,18,36,.88)'; E.rr(16, top + h + 8, VW - 32, 48, 10); g.fill(); g.fillStyle = E.C.chalk; g.font = `800 13px ${E.FB}`; g.textAlign = 'left'; imMnTextLines(E, E.wrapText(it.q, VW - 56, g.font, 2), 28, top + h + 28, 17, E.C.chalk); }
+    },
+    drawEnd(mm, k) {
+      const g = E.g, VW = E.VW, y = Math.max(220, E.VH * 0.36);
+      g.globalAlpha = k; imMnPaper(E, 24, y, VW - 48, 108, '#FFFDF4', 14);
+      g.fillStyle = '#1B2340'; g.font = `20px ${E.FD}`; g.textAlign = 'center'; g.fillText('답안지 제출', VW / 2, y + 36);
+      g.font = `800 12.5px ${E.FB}`; g.fillStyle = '#4A5675'; g.fillText(`논리 ${mm.right}/${items.length} · ${mm.right >= 2 ? '할 말은 다 썼다' : '아쉬움이 남는다'}`, VW / 2, y + 62);
+      g.fillStyle = '#1F4E9C'; g.fillText('결과는 12월 — 수능 최저까지 맞춰야 합격', VW / 2, y + 86); g.globalAlpha = 1;
+    },
+    score: (mm) => mm.right / items.length,
+  });
+  return m;
+}
+
+/* ---------- 5. 미니: 예상 등급컷 새로고침 (수능날 밤) ---------- */
+function imCutMini(E, o = {}) {
+  const fin = imMnFin(E, o), C = E.C, sites = ['기가스터디', '대승마이백', '세대인재'];
+  const rows = (o.rows || []).map((r) => Object.assign({}, r, { cut: r.cut.slice() }));
+  const m = {
+    type: 'imCut', bpm: 92, style: null, cfg: { night: true }, noFail: true, phase: 'live', ph0: 0, n: 0, upd: 0, pad: [null, ['↑ F5', '등급컷 새로고침'], null],
+    enter() { E.banner('예상 등급컷', '↑ 새로고침 · 밤마다 바뀐다', true); },
+    update(dt, st) {
+      if (this.phase === 'live' && (this.n >= 5 || st > 9)) { this.phase = 'end'; this.ph0 = st; E.setPad(null); }
+      else if (this.phase === 'end' && st - this.ph0 > 2.8 && !this.done) { this.done = true; fin(1, this); }
+    },
+    input(d, now) {
+      const st = now - this.t0;
+      if (this.phase === 'end') { if (st - this.ph0 > 1) this.ph0 = st - 2.8; return; }
+      if (d !== 'up') return;
+      this.n++; this.upd = st; E.sfx.key();
+      rows.forEach((r, i) => { r.cut = r.cut.map((c, j) => E.clamp(c + [-1, 0, 1, 1, -1, 0, 2, -2][(imMnHash(`${o.seed || ''}|${this.n}|${i}|${j}`)) % 8] * (r.step || 1), r.lo || 60, r.hi || 98)); });
+      E.pop(E.VW / 2, E.VH * 0.62, E.rnd(['컷이 또 바뀌었다…', '1점 올랐다?!', '학원마다 달라…', 'F5!']), C.chalk, 15);
+    },
+    tap(p, now) { this.input('up', now); },
+    auto() { this._a = (this._a || 0) + 1; if (this._a % 3 === 0 || this.phase === 'end') this.input('up', E.clockNow()); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH;
+      imMnBG(E, 'bedroom', this, b, now);
+      g.fillStyle = 'rgba(8,10,26,.55)'; g.fillRect(0, 0, VW, VH);
+      imMnHead(E, `예상 1등급 컷 · 새로고침 ${this.n}회`, this.phase === 'live' ? 1 - Math.min(1, st / 9) : 1, C.info, E.G && E.G.D ? E.hm(E.G.min % 1440) : '');
+      const x = 14, y = 104, w = VW - 28, cw = (w - 120) / 3, rh = 44;
+      imMnPaper(E, x, y, w, 64 + rows.length * rh, '#FFFDF4', 12);
+      g.fillStyle = '#1B2340'; g.font = `15px ${E.FD}`; g.textAlign = 'left'; g.fillText('입시업체 예상 등급컷 (원점수)', x + 12, y + 24);
+      g.font = `800 10.5px ${E.FB}`; g.fillStyle = '#6A7393'; g.fillText('영역', x + 12, y + 48); g.fillText('내 가채점', x + 52, y + 48);
+      sites.forEach((s, j) => { g.textAlign = 'center'; g.fillText(imMnFitStr(E, s, cw - 4), x + 120 + cw * j + cw / 2, y + 48); });
+      rows.forEach((r, i) => {
+        const yy = y + 58 + i * rh, best = Math.max(...r.cut), worst = Math.min(...r.cut);
+        g.fillStyle = i % 2 ? '#F3F5FA' : '#FFFFFF'; g.fillRect(x + 6, yy, w - 12, rh - 4);
+        g.textAlign = 'left'; g.fillStyle = '#1B2340'; g.font = `800 13px ${E.FB}`; g.fillText(r.k, x + 12, yy + 25);
+        g.fillStyle = r.raw >= best ? '#1F7A4D' : r.raw >= worst ? '#B26A00' : '#C62828'; g.font = `18px ${E.FD}`; g.fillText(String(r.raw), x + 60, yy + 27);
+        r.cut.forEach((c, j) => { const cx = x + 120 + cw * j + cw / 2, fresh = this.n && st - this.upd < 0.5; g.textAlign = 'center'; g.fillStyle = fresh ? '#C62828' : '#33405F'; g.font = `${fresh ? 18 : 16}px ${E.FD}`; g.fillText(String(c), cx, yy + 27); });
+      });
+      const yb = y + 70 + rows.length * rh;
+      g.fillStyle = C.ink; g.font = `800 12px ${E.FB}`; g.textAlign = 'center';
+      g.fillText(this.phase === 'end' ? '…새로고침은 여기까지. 진짜 컷은 12월 10일.' : '초록 = 세 곳 다 넘음 · 노랑 = 경계 · 빨강 = 아직', VW / 2, yb + 10);
+      if (this.phase === 'end') { g.fillStyle = C.chalk; g.fillText('엄마: "점수는 안 물어볼게. 자자."', VW / 2, yb + 30); }
+    },
+  };
+  return m;
+}
+
+/* ---------- 6. 미니: 수능 최저 판정 (12월 10일 성적) ---------- */
+function imMinCheckMini(E, o = {}) {
+  const fin = imMnFin(E, o), C = E.C, rows = o.rows || [], PER = 0.95;
+  const m = {
+    type: 'imMinCheck', bpm: 100, style: 'tense', cfg: {}, noFail: true, ph0: 0, pad: null,
+    endAt: 1 + rows.length * PER + 0.6,
+    update(dt, st) { if (st > this.endAt + 2.6 && !this.done) { this.done = true; fin(1, this); } },
+    input(d, now) { const st = now - this.t0; if (st > this.endAt) this.endAt = st - 2.6; },
+    tap(p, now) { this.input('up', now); },
+    enter() { E.banner('수능 최저 판정', '12월 10일 성적표 기준', true); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH, bot = VH - E.padV;
+      imMnBG(E, o.bg || 'classroom', this, b, now);
+      g.fillStyle = 'rgba(10,12,24,.5)'; g.fillRect(0, 0, VW, VH);
+      imMnHead(E, '수능 최저학력기준 판정', E.clamp((st - 1) / (rows.length * PER), 0, 1), C.info, o.grades || '');
+      const x = 14, y = 102, w = VW - 28, rh = Math.min(52, (bot - y - 70) / Math.max(1, rows.length));
+      imMnPaper(E, x, y, w, 50 + rows.length * rh, '#FFFDF4', 12);
+      g.fillStyle = '#1B2340'; g.font = `15px ${E.FD}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, `내 성적: ${o.grades || ''}`, w - 24), x + 12, y + 28);
+      rows.forEach((r, i) => {
+        const yy = y + 44 + i * rh, show = st > 1 + i * PER;
+        g.fillStyle = i % 2 ? '#F3F5FA' : '#FFFFFF'; g.fillRect(x + 6, yy, w - 12, rh - 4);
+        g.fillStyle = '#1B2340'; g.font = `800 12.5px ${E.FB}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, r.univ, w - 150), x + 14, yy + 19);
+        g.fillStyle = '#6A7393'; g.font = `800 10.5px ${E.FB}`; g.fillText(imMnFitStr(E, `${r.type} · ${r.minText}`, w - 150), x + 14, yy + 36);
+        if (!show) { g.fillStyle = '#B9C0DA'; g.textAlign = 'right'; g.font = `800 12px ${E.FB}`; g.fillText('확인 중…', x + w - 16, yy + 28); return; }
+        const k = E.clamp((st - 1 - i * PER) / 0.25, 0, 1), txt = r.none ? '최저 없음' : r.ok ? '충족 ✓' : '미충족 ✗', col = r.none ? '#8A93AD' : r.ok ? '#1F7A4D' : '#C62828';
+        g.save(); g.translate(x + w - 64, yy + rh / 2 - 2); g.rotate(-0.12); g.scale(1 + (1 - k) * 0.8, 1 + (1 - k) * 0.8); g.globalAlpha = k;
+        g.strokeStyle = col; g.lineWidth = 2.5; E.rr(-46, -15, 92, 28, 8); g.stroke(); g.fillStyle = col; g.font = `15px ${E.FD}`; g.textAlign = 'center'; g.fillText(txt, 0, 6);
+        g.restore();
+      });
+      if (st > this.endAt) { const ok = rows.filter((r) => r.ok && !r.none).length, bad = rows.filter((r) => !r.ok && !r.none).length; g.fillStyle = bad ? C.hr : C.act; g.font = `800 13px ${E.FB}`; g.textAlign = 'center'; g.fillText(bad ? `최저 미충족 ${bad}장 · 충족 ${ok}장` : `최저 걸린 원서 ${ok}장 모두 충족!`, VW / 2, Math.min(bot - 10, y + 70 + rows.length * rh)); }
+    },
+  };
+  return m;
+}
+
+/* ---------- 7. 미니: 예비 번호 매일 새로고침 → (추합 전화 | 충원 마감) ---------- */
+function imWaitMini(E, o = {}) {
+  const fin = imMnFin(E, o), C = E.C, days = o.days || ['1차', '2차', '3차', '마지막 날'], N = days.length, start = Math.max(2, o.no || 9), DAY = 1.25;
+  const dead = E.clamp(o.dead || 2, 1, start - 1);
+  const nums = days.map((_, i) => { if (o.got && i === N - 1) return 0; const f = (i + 1) / N; const v = Math.round(start * Math.pow(1 - f, 1.15)); return o.got ? Math.max(1, v) : Math.max(dead, v); });
+  const m = {
+    type: 'imWait', bpm: 96, style: 'tense', cfg: { night: true }, noFail: true, phase: 'days', d: 0, d0: 0, ph0: 0, pad: [null, ['↑', '새로고침'], null], got: !!o.got, nums,
+    enter() { E.banner(`${o.label || '충원'} · 예비 ${start}번`, '매일 밤 입학처 새로고침', true); this.d0 = 0.6; },
+    cur() { return this.d === 0 ? start : nums[this.d - 1]; },
+    update(dt, st) {
+      if (this.phase === 'days' && st - this.d0 >= DAY) { this.d++; this.d0 = st; if (this.d <= N) E.sfx.key(); if (this.d >= N) { this.phase = o.got ? 'ring' : 'stop'; this.ph0 = st; E.setPad(null); if (o.got) E.sfx.ring(); else E.sfx.over(); } }
+      else if (this.phase === 'ring' && Math.floor((st - this.ph0) / 0.8) !== this._r) { this._r = Math.floor((st - this.ph0) / 0.8); E.sfx.ring(); E.shake(0.15); }
+      if ((this.phase === 'ring' || this.phase === 'stop') && st - this.ph0 > 3 && !this.done) { this.done = true; fin(o.got ? 1 : 0, this); }
+    },
+    input(d, now) { const st = now - this.t0; if (this.phase === 'days') { if (d === 'up' && st - this.d0 > 0.45) this.d0 = st - DAY; return; } if (st - this.ph0 > 1.4) this.ph0 = st - 3; },
+    tap(p, now) { this.input('up', now); },
+    auto() { this._a = (this._a || 0) + 1; if (this.phase !== 'days' && this._a % 2 === 0) this.input('up', E.clockNow()); },
+    draw(st, b, now) {
+      const g = E.g, VW = E.VW, VH = E.VH, bot = VH - E.padV;
+      imMnBG(E, 'bedroom', this, b, now);
+      g.fillStyle = 'rgba(8,10,26,.55)'; g.fillRect(0, 0, VW, VH);
+      imMnHead(E, `${o.univ || '대학'} · 예비 번호 조회`, Math.min(1, this.d / N), this.phase === 'stop' ? C.hr : C.chalk, this.d < N ? days[Math.min(this.d, N - 1)] : (o.endText || '마감'));
+      const x = 16, y = 102, w = VW - 32;
+      // 날짜 줄
+      const cw = (w - 8) / N;
+      days.forEach((dd, i) => {
+        const on = i < this.d, curD = i === this.d - 1;
+        g.fillStyle = curD ? 'rgba(255,213,74,.35)' : on ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.06)'; E.rr(x + 4 + i * cw, y, cw - 4, 50, 8); g.fill();
+        g.fillStyle = on ? C.ink : C.ink2; g.font = `800 9.5px ${E.FB}`; g.textAlign = 'center';
+        imMnTextLines(E, E.wrapText(dd, cw - 8, g.font, 2), x + 4 + i * cw + (cw - 4) / 2, y + 16, 11, on ? C.ink : C.ink2, 'center');
+        if (on) { g.fillStyle = nums[i] === 0 ? C.act : C.chalk; g.font = `13px ${E.FD}`; g.fillText(nums[i] === 0 ? '☎' : `${nums[i]}번`, x + 4 + i * cw + (cw - 4) / 2, y + 44); }
+      });
+      // 큰 번호
+      const cy = y + 140;
+      if (this.phase === 'days') {
+        const prev = this.d === 0 ? start : this.d === 1 ? start : nums[this.d - 2], now2 = this.cur(), k = E.clamp((st - this.d0) / 0.4, 0, 1);
+        g.fillStyle = C.ink2; g.font = `800 12px ${E.FB}`; g.textAlign = 'center'; g.fillText('내 예비 번호', VW / 2, cy - 54);
+        if (this.d > 0 && prev !== now2) { g.globalAlpha = 1 - k; g.fillStyle = C.ink2; g.font = `40px ${E.FD}`; g.fillText(`${prev}`, VW / 2, cy - 4 - k * 20); g.strokeStyle = C.hot; g.lineWidth = 4; g.beginPath(); g.moveTo(VW / 2 - 40, cy - 18 - k * 20); g.lineTo(VW / 2 + 40, cy - 18 - k * 20); g.stroke(); g.globalAlpha = 1; }
+        g.globalAlpha = this.d > 0 ? k : 1; g.fillStyle = C.chalk; g.font = `64px ${E.FD}`; g.fillText(`${now2}`, VW / 2, cy + 22); g.globalAlpha = 1;
+        g.fillStyle = C.ink; g.font = `800 12.5px ${E.FB}`; g.fillText(this.d === 0 ? '최초 발표: 예비 번호를 받았다' : `${days[this.d - 1]} · ${prev === now2 ? '그대로…' : `${prev - now2}명 빠졌다!`}`, VW / 2, cy + 56);
+        g.fillStyle = C.ink2; g.font = `800 11px ${E.FB}`; g.fillText('충원은 예비 순서대로 · 등록 포기한 만큼 빠진다', VW / 2, cy + 78);
+      } else if (this.phase === 'ring') {
+        const sh = Math.sin(st * 40) * 4;
+        imMnPaper(E, VW / 2 - 110 + sh, cy - 70, 220, 150, '#1B1F33', 26);
+        g.fillStyle = '#4FD69C'; g.font = `42px ${E.FD}`; g.textAlign = 'center'; g.fillText('📞', VW / 2 + sh, cy - 18);
+        g.fillStyle = '#fff'; g.font = `18px ${E.FD}`; g.fillText('02-○○○-○○○○', VW / 2 + sh, cy + 18);
+        g.fillStyle = '#B9C0DA'; g.font = `800 11.5px ${E.FB}`; g.fillText(`${o.callAt || '21:03'} · 모르는 번호`, VW / 2 + sh, cy + 42);
+        g.fillStyle = C.chalk; g.font = `800 13px ${E.FB}`; g.fillText('…혹시?!', VW / 2, cy + 104);
+      } else {
+        g.fillStyle = C.ink2; g.font = `800 12px ${E.FB}`; g.textAlign = 'center'; g.fillText(o.endText || '충원 마감', VW / 2, cy - 54);
+        g.fillStyle = C.hr; g.font = `56px ${E.FD}`; g.fillText(`${nums[N - 1]}번`, VW / 2, cy + 14);
+        g.fillStyle = C.ink; g.font = `800 12.5px ${E.FB}`; g.fillText(`예비 ${start}번 → ${nums[N - 1]}번에서 멈췄다`, VW / 2, cy + 48);
+        g.fillStyle = C.ink2; g.font = `800 11px ${E.FB}`; g.fillText('전화는 끝내 오지 않았다. 한 끗이었다.', VW / 2, cy + 70);
+      }
+      const me = imMnMe(E);
+      E.drawFront(VW / 2, bot - 8, 0.62, { body: me.body, hair: me.hair, glasses: me.glasses, long: me.pony, pose: 'phone', bow: this.phase === 'stop' ? 0.5 : 0 });
+    },
+  };
+  return m;
+}
+
+/* ---------- 8. 미니: 장면 속 선택 (수능날 아침 등 — 배경이 그 장소) ----------
+   o = { title, kicker, icon, lines[], opts:[{label, sub}], bg, cfg, time, def(시간 초과 시 번호), bot(봇 번호), onPick(idx) } */
+function imLateAskMini(E, o = {}) {
+  const fin = imMnFin(E, {}), C = E.C;
+  const items = [{ q: o.title || '', opts: (o.opts || []).map((x) => (x.sub ? `${x.label} — ${x.sub}` : x.label)), ans: -1 }];
+  const m = imMnChoiceMini(E, {
+    fin, title: o.title, banner: o.banner || o.title, bannerSub: o.bannerSub || '', bg: o.bg || 'bedroom', scene: o.cfg || {}, style: o.style === undefined ? 'tense' : o.style, bpm: 100, items, time: o.time || 14, neutral: true, endHold: 0.5, fbDur: 0.7,
+    headText: () => o.head || o.title || '선택', onTimeout: () => o.def ?? 0, botPick: () => o.bot ?? 0,
+    onPick: (mm, idx) => { if (o.onPick) o.onPick(idx); },
+    drawBody(mm) {
+      const g = E.g, VW = E.VW, top = 100, bot = (mm.cardsTop || E.VH * 0.6) - 12, w = VW - 32, font = `800 13px ${E.FB}`;
+      const lines = [].concat(...(o.lines || []).map((l) => E.wrapText(String(l), w - 32, font, 4)));
+      const maxL = Math.max(0, Math.floor((bot - top - 76) / 18)), shown = lines.slice(0, maxL), h = Math.min(bot - top, 76 + shown.length * 18);
+      if (h < 50) return;
+      imMnPaper(E, 16, top, w, h, '#FFFDF4', 12);
+      g.fillStyle = o.color || C.hot; E.rr(16, top, w, 7, 3); g.fill();
+      if (o.kicker) { g.fillStyle = '#6A7393'; g.font = `800 11px ${E.FB}`; g.textAlign = 'left'; g.fillText(imMnFitStr(E, o.kicker, w - 30), 30, top + 26); }
+      g.font = `24px ${E.FD}`; g.textAlign = 'left'; g.fillText(o.icon || '❓', 26, top + 58);
+      g.fillStyle = '#1B2340'; E.fitText(o.title || '', w - 70, 19, E.FD); g.fillText(o.title || '', 62, top + 55);
+      g.font = font; imMnTextLines(E, shown, 30, top + 82, 18, '#33405F');
+    },
+    score: () => 1,
+  });
+  const a0 = m.auto; m.auto = function () { if (this.phase === 'q' && this.stNow() - this.qSt < 2.8) return; a0.call(this); }; // 봇·영상: 질문을 3초쯤 보여 주고 고른다
+  return m;
+}
+const imLateAsk = (E, o) => imMini(E, 'imLateAskMini', o, () => null);
+
+/* =====================================================================
+   에피소드
+   ===================================================================== */
+const imLateNote = (E, o) => imMini(E, 'imLateNoteMini', o, () => E.cardMini(o.title || '', (o.lines || [])[0] || '', null, o.bg || 'bedroom', 4));
+function imLateBusCard(E, title, sub, police) { const c = E.cardMini(title, sub, 'urgent', 'busstop', 5); c.cfg = { bus: 'none', police: !!police, morning: true, cold: true, dest: '○○고등학교' }; return c; }
+
+/* ---- 8월: 수시/정시 갈림길 상담 · 6장 조합 ---- */
+function imLateAugConsult(E, s, done) {
+  const S = E.G.S, L = imLateSt(S), hr = imHR(E), t = imTrackOf(E), mj = imMajorOf(E);
+  const last = S.mockHistory.filter((x) => x.nth === S.nth).slice(-1)[0];
+  const gtxt = last ? `${last.label} 국${last.grades.kor} 수${last.grades.math} 영${last.grades.eng} 탐${last.grades.tam}` : '모의 성적 없음';
+  const ns = imNaesinAvg(S), nm = imName(S) === '나' ? '' : imName(S) + ', ';
+  const fin = () => { imAlbum(E, '🗂️', '담임 쌤이 그려 준 원서 6칸'); done(); };
+  const step2 = () => {
+    const lean = L.lean || 'both';
+    imChoice(E, { id: 'lateMix', title: '6장 조합', sub: '담임 상담 ② · 상향 / 적정 / 안정', who: hr, text: `${E.esc(mj.name)} 계열 최저 대략 <b>${E.esc(imMinText(mj.min))}</b> · 「안정」은 붙으면 가야 하는 곳`, opts: [
+      { label: '상향 2 · 적정 2 · 안정 2', sub: '교과서 같은 조합', bot: lean === 'jungsi' ? 1 : 3, fn: () => { L.mix = { 상향: 2, 적정: 2, 안정: 2 }; imApply(E, { mental: 4 }, '균형 조합'); after(); } },
+      { label: '상향 3 · 적정 2 · 안정 1', sub: '꿈 쪽으로 · 수시납치 걱정 ↓', bot: lean === 'jungsi' ? 3 : 1, fn: () => { L.mix = { 상향: 3, 적정: 2, 안정: 1 }; imApply(E, { mental: 2 }, '꿈 조합'); after(); } },
+      { label: '상향 1 · 적정 2 · 안정 3', sub: '보험 쪽으로 · 대신 「납치」 각오', bot: 0, fn: () => { L.mix = { 상향: 1, 적정: 2, 안정: 3 }; imApply(E, { mental: 3 }, '안정 조합'); after(); } },
+    ] });
+  };
+  const after = () => E.say([{ who: hr, text: '마지막으로 하나. 수시에 합격하면 등록을 안 해도 정시는 못 써. 최초합이든 추합이든.' }, { who: hr, text: '그러니까 안정 카드는 「붙으면 진짜 갈 곳」만. 그게 원서의 기본이야.' }, { who: '나', text: '(6칸짜리 표. 칸 하나에 1년이 들어 있다.)' }], fin);
+  E.runMinis([imLateNote(E, { kicker: '8월 모의평가 날 · 17:20 교무실', icon: '🗂️', title: '수시냐, 정시냐', lines: [`${gtxt} (가채점 · 성적표는 2주 뒤)`, `내신 ${ns.toFixed(2)} · 생기부 ${Math.round(S.saeng)}`, '수시 원서는 9월 20~23일. 그 전에 무게 중심을 정한다.'], bg: 'staffroom', color: IMC_COL.hr, sec: 4.4 })], () => E.say([
+    { who: hr, text: `${nm}8모 끝났지. 오늘은 숫자 말고 방향 얘기를 하자.` },
+    { who: hr, text: t.id === 'jungsi' ? '정시파이터라도 수시 6장은 공짜 기회야. 다만 너무 낮게 쓰면 수시에 「납치」돼.' : `${t.name}면 내신 ${ns.toFixed(2)}에 생기부가 무기야. 그래도 수능 최저는 끝까지 붙잡아야 해.` },
+  ], () => imChoice(E, { id: 'lateLean', title: '수시 / 정시 갈림길', sub: '담임 상담 ① · 무게 중심', who: hr, text: `${E.esc(gtxt)} · 내신 <b>${ns.toFixed(2)}</b> · 생기부 <b>${Math.round(S.saeng)}</b>`, opts: [
+    { label: '수시 중심 — 6장에 집중', sub: '내신 · 생기부 · 최저', bot: t.id === 'jungsi' ? 1 : 3, fn: () => { L.lean = 'susi'; imApply(E, { mental: 4 }, '수시 중심'); step2(); } },
+    { label: '정시 중심 — 수능 100%', sub: '수시는 상향 위주', bot: t.id === 'jungsi' ? 3 : 0, fn: () => { L.lean = 'jungsi'; imApply(E, { mental: 3 }, '정시 중심'); step2(); } },
+    { label: '반반 — 수시 6장 + 수능 끝까지', sub: '체력 관리가 관건', bot: 2, fn: () => { L.lean = 'both'; imApply(E, { mental: 2, hp: -2 }, '양쪽 다'); step2(); } },
+  ] })));
+}
+/* ---- 8월 밤: 가족 단톡 — 엄마 vs 아빠 ---- */
+function imLateParents(E) {
+  const S = E.G.S, L = imLateSt(S), v = imVoc(S);
+  E.runMinis([E.phoneMini('가족 💛 (3)', [[1.5, 'c', `엄마: ${v}, 원서 안정 3장은 꼭 넣자. 재수는 엄마 마음이 아파.`], [4.4, 'c', '아빠: 아빠는 상향 4장! 인생 한 번인데 꿈 쪽으로 가야지 👍'], [7.2, 'c', '엄마: 당신은 맨날 꿈 얘기만 하지…'], [9.6, 'c', '아빠: 😅 그럼 상향 3…?'], [12, 'm', '두 분 다 고마운데… 내 원서는 내가 정할게. 담임 쌤이랑 짠 조합 보여 줄게!']], { end: 15 })], () => imChoice(E, { id: 'lateParents', title: '엄마 vs 아빠, 원서 6장', sub: '8월 · 가족 단톡', who: '가족 💛 (3)', text: L.mix ? `담임 쌤과 정한 조합: 상향 ${L.mix.상향} · 적정 ${L.mix.적정} · 안정 ${L.mix.안정}` : '조합은 아직', opts: [
+    { label: '엄마 편 — 안정 하나 더', sub: '마음의 보험', bot: 1, fn: () => { L.parents = 'mom'; imApply(E, { mental: 3 }, '엄마 편'); E.say([{ who: '엄마', text: '그래, 고마워. 엄마는 그냥 네가 웃었으면 해.' }, { who: '아빠', text: '(이모티콘: 백기 든 곰)' }]); } },
+    { label: '아빠 편 — 상향 하나 더', sub: '꿈은 크게', bot: 1, fn: () => { L.parents = 'dad'; imApply(E, { mental: 3 }, '아빠 편'); E.say([{ who: '아빠', text: '역시 내 새끼! 대신 수능은 아빠가 대신 못 봐 준다 ㅋㅋ' }, { who: '엄마', text: '…알았어. 대신 밥은 꼭 먹고.' }]); } },
+    { label: '내 조합을 차근차근 설명하기', sub: '내 원서는 내가', bot: 3, fn: () => { L.parents = 'me'; imApply(E, { mental: 8 }, '내 원서는 내가'); imAlbum(E, '👨‍👩‍👧', '가족 단톡 — 「내 원서는 내가 정할게」'); E.say([{ who: '엄마', text: '…우리 딸/아들이 언제 이렇게 컸지.'.replace('딸/아들', S.gender === 'm' ? '아들' : '딸') }, { who: '아빠', text: '좋다. 그럼 우리 둘은 원서비 결제 담당 💳' }]); } },
+  ] }));
+}
+
+/* ---- 9월: 원서 접수 마지막 날 (접속 대기 → 6장 → 결제 → (저장 실수 위기)) ---- */
+function imLateWonseo(E, q) {
+  const S = E.G.S, L = imLateSt(S), mj = imMajorOf(E);
+  const last = S.mockHistory.filter((x) => x.nth === S.nth && x.kind === '모평').slice(-1)[0] || S.mockHistory.slice(-1)[0];
+  const slow = imLF('queue') || imSeed(`${S.examNo}|queue|${S.nth}`) < 0.35;
+  const Q = slow ? 6200 + Math.round(imSeed(`${S.examNo}|qn`) * 3600) : 1400 + Math.round(imSeed(`${S.examNo}|qn`) * 1200);
+  let res = null;
+  const intro = imLateNote(E, { kicker: `9월 23일(목) · 수시 원서 접수 마지막 날 · ${E.hm(E.G.min)}`, icon: '📝', title: '원서 6장, 오늘이 마지막', lines: [`원서 접수 대행 사이트 「${IML_SITE}」. 마감 시각은 대학마다 달라 — 17시 · 18시 · 21시!`, '내 6장은 전부 오늘 18:00 마감.', '「저장」은 접수가 아니다. 결제해서 접수번호가 나와야 끝.'], bg: 'bedroom', color: IMC_COL.hot, sec: 5 });
+  const qm = imMini(E, 'imQueueMini', { queue: Q, slow, site: IML_SITE, name: S.name || '', onEnd: (sc, m) => { L.queue = { n: Q, refresh: m ? m.refreshes : 0 }; } }, () => null);
+  const wm = imMini(E, 'imWonseoMini', { track: S.track, major: S.major, majorName: mj.name, univs: imUnivObjs(E), want: L.mix || null, scores: { naesin: imNaesinAvg(S), saeng: Math.round(S.saeng), setuk: Math.round(S.saeng), mock: last ? Math.round(['kor', 'math', 'eng', 'tam'].reduce((a, k) => a + last.grades[k], 0) / 4 * 10) / 10 : 3.5, grades: last ? last.grades : null, pct: last ? last.pct : null, min: mj.min }, name: S.name || '', onEnd: (sc, m) => { res = m; } }, () => null);
+  E.runMinis([intro, qm, wm].filter(Boolean), () => {
+    const cards = imNormCards(E, res && (Array.isArray(res.cards) ? res.cards : res.chosen));
+    const crisis = !imLF('nosave') && (imLF('save') || imLF('savefail') || imSeed(`${S.examNo}|save|${S.nth}`) < 0.16) && cards.length >= 2;
+    const k = crisis ? Math.max(0, cards.findIndex((c) => c.tier === 'fit')) : -1;
+    const fee = Math.round(cards.reduce((a, c) => a + imLateFee(c), 0) * 10) / 10;
+    const pay = E.formMini({ sys: 'agg', frame: 'agg', title: '전형료 결제', sub: `「${IML_SITE}」 · 장바구니 ${cards.length}건`, path: '2028학년도 수시 › 결제', goal: crisis ? `결제 ${cards.length - 1}건 · 저장 1건` : `${cards.length}건 · 전형료 ${fee}만 원`, stampText: '결제 완료',
+      steps: [
+        { f: '원서 확인', ask: '결제 전 마지막 확인은?', ans: '전형명 · 모집단위 · 수능 최저', opts: ['대학 이름만', '그냥 결제'], why: '전형 이름이 비슷한 게 많다' },
+        { f: '전형료', ask: `전형료 합계 약 ${fee}만 원 (전형마다 다름)`, ans: '엄마 카드로 결제', opts: ['나중에 결제 (저장만)', '창 닫기'], why: '저장만 하면 접수 미완료!' },
+        { f: '접수번호', ask: '접수 완료 확인', ans: '접수번호 캡처', opts: ['창 닫기', '로그아웃'], why: '접수번호가 있어야 완료' },
+      ] }, { forced: true, onEnd: () => {} });
+    E.runMinis([pay], () => {
+      if (crisis && cards[k]) { cards[k].unpaid = true; L.unpaidIdx = k; }
+      S.susi = { cards, applied: true, mi: S.mi };
+      S.schedRev = (S.schedRev || 0) + 1; imSchedCache.key = '';
+      L.fee = fee; L.wonseoAt = E.G.min;
+      E.completeQuest(q.id);
+      imAlbum(E, '📝', `수시 원서 ${crisis ? '5+1' : '6'}장 접수 캡처`);
+      imMental(E, 4);
+      const morning = E.G.min < E.T('08:00');
+      E.say([{ who: '나', text: `접수 완료! ${cards.map((c) => c.univ).slice(0, 3).join(', ')}…` }, { who: '엄마', text: `전형료 ${fee}만 원은 엄마 카드로 했어. 이제 너는 공부만 해.` }, { who: '나', text: morning ? '(등교 전에 끝냈다. 이제 학교로!)' : '(이제 학교로 복귀. 야자 전에 도윤이한테 캡처 자랑해야지.)' }], () => {
+        if (!crisis) return;
+        if (E.G.min >= E.T('17:30')) imLateSaveCrisis(E); else imLateTimer(E, '17:30', imLateSaveCrisis);
+      });
+    });
+  });
+}
+function imLateSaveCrisis(E) {
+  const S = E.G.S, L = imLateSt(S), c = S.susi && S.susi.cards && S.susi.cards[L.unpaidIdx];
+  if (!c || !c.unpaid || L.saveCrisis) return;
+  L.saveCrisis = 'run';
+  const fail = imLF('savefail');
+  let ok = null;
+  E.G.min = Math.max(E.G.min, E.T('17:52'));
+  const shown = Math.min(E.G.min, E.T('17:56'));
+  E.runMinis([imLateNote(E, { kicker: `${E.hm(shown)} · 휴대폰 알림`, icon: '🔔', title: `「${IML_SITE}」 결제 대기 1건!`, lines: [`${c.univ} — 상태: 작성 중 (저장만 됨)`, '저장은 접수가 아니다. 결제해야 접수번호가 나온다.', `마감 18:00까지 ${Math.max(4, E.T('18:00') - shown)}분!`], bg: 'library', color: IMC_COL.hot, sec: 4.2, sfx: 'bad', shake: 0.4 }),
+    imMini(E, 'imDeadlineMini', { univ: c.univ, fee: imLateFee(c), fail, onEnd: (sc, m) => { ok = !!(m && m.ok); } }, () => null)].filter(Boolean), () => {
+    if (ok === null) ok = !fail;
+    E.G.min = Math.max(E.G.min, E.T('17:59'));
+    if (ok) {
+      delete c.unpaid; L.saveCrisis = 'ok'; imApply(E, { mental: 4 }, '17:59 접수 완료');
+      imAlbum(E, '⏱️', '17:59:4x · 여섯 번째 접수번호 캡처');
+      E.say([{ who: '나', text: '…접수번호 떴다. 17시 59분 4x초.' }, { who: imNpcName(E, 'mate1', '도윤'), text: '(옆자리에서) 너 방금 숨 안 쉬었어. 진짜로.' }, { who: '나', text: '(저장 ≠ 접수. 평생 안 잊는다.)' }]);
+      return;
+    }
+    S.susi.cards = S.susi.cards.filter((x) => x !== c); S.susi.lost = c; L.saveCrisis = 'fail';
+    S.schedRev = (S.schedRev || 0) + 1; imSchedCache.key = '';
+    imMental(E, -12); imAlbum(E, '🕕', `18:00:00 「접수 기간이 아닙니다」 — ${c.univ}`);
+    imCard(E, `<div class="eb">9월 23일 · 18:00 · 원서 마감</div><h2>1장을 놓쳤다</h2><p class="tag">${E.esc(c.univ)} — 「접수 기간이 아닙니다」.<br>저장만 하고 결제를 안 했던 한 장.</p><div class="brief"><div>남은 원서 <b>${S.susi.cards.length}장</b>. 6장이 5장이 됐지만, 수능은 그대로다.</div><div style="font-size:11.5px">원서는 결제 → 접수번호 확인까지. 마감은 여유 있게.</div></div>`, () => E.say([{ who: '엄마', text: `(전화) ${imVoc(S)}, 괜찮아. 다섯 장도 충분히 많아. 저녁 먹고 힘내자.` }]));
+  });
+}
+
+/* ---- 10월: 원정 논술 (지난 토요일 회상) ---- */
+function imLateTripCard(E) {
+  const S = E.G.S, L = imLateSt(S);
+  if (L.trip || !S.susi || !S.susi.cards || !S.susi.cards.length) return null;
+  let c = S.susi.cards.find((x) => /논술/.test(x.type || ''));
+  if (!c && imLF('nonsul')) { c = S.susi.cards[0]; c.type = '논술'; }
+  return c || null;
+}
+function imLateNonsulTrip(E, c, done) {
+  const S = E.G.S, L = imLateSt(S), dad = S.gender === 'm' ? '아빠' : '엄마';
+  L.trip = c.univ; c.pre = true;
+  let sc = null;
+  E.runMinis([
+    imLateNote(E, { kicker: '지난 토요일 04:50 · 회상', icon: '🚄', title: '원정 논술', lines: [`${c.univ} 논술고사 — 수능 전에 보는 몇 안 되는 논술.`, `KTX 첫차. ${dad}가 졸린 눈으로 운전해 역까지.`, '기차 안 절반이 수험생. 다들 같은 데 가는구나.'], bg: 'street', cfg: { night: true, caption: '새벽 기차역' }, color: IMC_COL.purple, sec: 5 }),
+    imMini(E, 'imNonsulMini', { univ: c.univ, major: S.major, onEnd: (s) => { sc = s; } }, () => null),
+  ].filter(Boolean), () => {
+    L.nonsul = L.nonsul || {}; L.nonsul[c.univ] = sc == null ? 0.6 : sc;
+    imApply(E, { hp: -6, mental: sc >= 0.67 ? 5 : -2 }, '원정 논술');
+    imAlbum(E, '🚄', `${c.univ} 원정 논술 — 새벽 기차표`);
+    E.say([{ who: dad, text: `(학부모 대기실 앞) ${imVoc(S)}! 여기. 핫팩이랑 김밥.` }, { who: '나', text: sc >= 0.67 ? '할 말은 다 썼어. 이제 최저만 맞추면 돼!' : '…시간이 모자랐어. 그래도 끝까지 썼어.' }, { who: dad, text: '돌아가는 기차에선 자. 오늘 일은 오늘 끝.' }, { who: '나', text: '(그리고 월요일 — D-30.)' }], done);
+  });
+}
+
+/* ---- 11월 17일: 수능 예비소집 (10월 밤 → 한 달 뒤로) ---- */
+function imLatePreCall(E, done) {
+  const S = E.G.S, hr = S.nth > 1 ? '원서 접수처 선생님' : imHR(E), t = imTrackOf(E);
+  S.flags.precall = 1;
+  const tk = imMini(E, 'imTicketMini', { name: imName(S), no: S.examNo, csat: true, year: S.year + 1, date: `${S.year}. 11. 18.(목)`, place: '○○고등학교 (제12시험장)', track: t.id, beats: 7, head: '수험표 받았다 · D-1' }, () => null);
+  const after = () => {
+    imAlbum(E, '🎫', '11월 17일 예비소집 — 수험표를 받은 날');
+    if (S.flags.scout1) return E.say([{ who: '나', text: '시험장은 한 달 전에 미리 가 봤다. 정문 → 본관 → 3층 끝. 머릿속 지도 완료.' }], done);
+    const skipP = imLF('noscout');
+    let k = -1;
+    E.runMinis([imLateAsk(E, { title: '예비소집 끝 — 시험장 가 볼까?', kicker: '11월 17일(수) 오후 · 수험표 받은 날', icon: '🗺️', lines: [`${hr}: 「시험장 건물 안엔 못 들어가도, 정문 · 버스 노선 · 걸리는 시간은 꼭 직접 확인해.」`], opts: [{ label: '시험장까지 직접 가 보기', sub: '버스 몇 번 · 몇 정거장 · 정문' }, { label: '피곤하니 바로 집에 가서 쉬기', sub: '지도 앱 있으니까…' }], bg: 'classroom', cfg: { board: '수능 예비소집 · 수험표 배부' }, style: null, def: 0, bot: skipP ? 1 : 0, onPick: (i) => { k = i; } })], () => {
+      if (k !== 1) return E.runMinis([imLateBusCard(E, '제12시험장 ○○고 정문', '버스 2정거장 · 정문에서 본관까지 4분')], () => { S.flags.scout1 = true; imApply(E, { hp: -2, mental: 4 }, '시험장 답사'); imAlbum(E, '🗺️', '예비소집 날 시험장 정문 앞'); E.say([{ who: '나', text: '정문은 여기. 내일 이 길로 온다.' }, { who: '나', text: '(버스 정류장 이름 사진 찍어 두기.)' }], done); });
+      S.flags.preSkip = 1; imApply(E, { hp: 4 }, '집에서 쉬기');
+      E.say([{ who: '나', text: '주소는 아니까 내일 지도 앱 보고 가면 되겠지.' }, { who: imNpcName(E, 'mate1', '도윤'), text: '(카톡) 너 시험장 가 봄? ○○고는 본관이랑 별관이 멀대.' }, { who: '나', text: '(…괜찮겠지?)' }], done);
+    });
+  };
+  E.runMinis([
+    imLateNote(E, { kicker: '그리고 한 달 뒤 · 11월 17일(수)', icon: '📢', title: '수능 예비소집', lines: [S.nth > 1 ? '원서를 낸 곳에서 수험표 받기.' : '3학년 교실. 담임 쌤이 수험표를 한 장씩 나눠 준다.', '수험표의 이름 · 사진 · 응시 영역 · 시험장 위치부터 확인.', '내일 입실 마감 08:10. 휴대폰은 1교시 전 제출.'], bg: 'classroom', cfg: { board: '수능 예비소집 · 수험표 배부' }, color: IMC_COL.info, sec: 5 }),
+    tk,
+  ].filter(Boolean), () => E.say([
+    { who: hr, text: '수험표 받으면 바로 확인. 4교시는 한국사 → 통합사회 → 통합과학 순서야.' },
+    { who: hr, text: '시험장은 ○○고. 예비소집 끝나면 정문하고 버스 노선은 꼭 직접 확인하고.' },
+    { who: imNpcName(E, 'mate3', '하준'), text: '수험표 사진 나 왜 이렇게 나왔냐… 이게 평생 남는다고?' },
+    { who: imNpcName(E, 'mate2', '서아'), text: '내일 우리 다 시험장 다르지? 끝나면 단톡에 「끝!」 하나씩만 올리자.' },
+  ], after));
+}
+
+/* ---- 수능날 아침: 강제 플래그 · 준비물 깜빡 · 순찰차 · 본부 재발급 · 휴대폰 제출 ---- */
+function imLateMornForce(S) {
+  if (!imLateOn(S)) return {};
+  const F = {};
+  if (imLF('oversleep')) F.oversleep = true;
+  if (imLF('police') || imLF('bike')) F.delay = true;
+  if (imLF('noscout')) F.venue = true;
+  return F;
+}
+function imLateForgot(E, M, miss, step, next) {
+  const S = E.G.S, v = imVoc(S);
+  if (imLF('ticket') || imLF('ticketback')) { if (!miss.includes('ticket')) miss.push('ticket'); }
+  if (imLF('id') && !miss.includes('id')) miss.push('id');
+  M.forgot = miss.slice(); M.reissue = M.reissue || [];
+  const seq = [];
+  const busCfg = { bus: 'none', morning: true, cold: true, dest: '○○고등학교' };
+  if (miss.includes('ticket')) seq.push((n) => { let k = -1; const back = imLF('ticketback'); E.runMinis([imLateBusCard(E, '🎫 수험표가 없다!', '정류장에서 가방을 열어 보니…'), E.phoneMini('엄마', [[1.5, 'c', `${v}! 수험표 책상 위에 있어!!`], [3.8, 'c', '엄마가 들고 뛰어갈까? 아니면 본부에서 다시 받을래?'], [6.4, 'm', '잠깐만 엄마, 생각 좀…!']], { end: 9 }), imLateAsk(E, { title: '수험표를 두고 나왔다', kicker: `${E.hm(M.clock)} · 버스 정류장 · 입실 마감 08:10`, icon: '🎫', lines: ['분실·미지참: 원서 사진과 같은 사진 1장 + 신분증 → 시험 당일 08:00까지 시험장 시험관리본부에서 재발급.', '사진이 없어도 본부에 신고하면 임시 수험표.'], opts: [{ label: '집으로 되돌아가기', sub: '왕복 +16분 · 엄마랑 골목에서' }, { label: '그냥 시험장으로 → 본부 재발급', sub: '지갑 속 원서 사진 여분 1장' }], bg: 'busstop', cfg: busCfg, def: 1, bot: back ? 0 : 1, onPick: (i) => { k = i; } })], () => {
+    if (k === 0) { step('수험표 가지러 되돌아감 (엄마랑 중간에서)', 16); M.ticketWay = 'back'; imAlbum(E, '🏃', '수험표 들고 뛰어온 엄마와 골목에서 만남'); return E.runMinis([imLateNote(E, { kicker: `${E.hm(M.clock)} · 집 앞 골목`, icon: '🏃', title: '엄마가 뛰어왔다', lines: ['엄마: (숨차게) 여기! 수험표! …도시락 반찬도 하나 더 넣었어.', '엄마: 가! 뒤돌아보지 말고!', '(16분이 날아갔다. 그래도 수험표는 내 손에.)'], bg: 'street', cfg: { caption: '집 앞 골목' }, color: IMC_COL.hr, sec: 4.4 })], n); }
+    M.reissue.push('ticket'); M.ticketWay = 'reissue';
+    E.runMinis([imLateNote(E, { kicker: `${E.hm(M.clock)} · 통화 끝`, icon: '👛', title: '본부에서 다시 받기로', lines: ['엄마: 그래, 8시 전에만 본부로 가! 침착하게.', '(지갑에 원서 사진 여분 한 장. 고1 때 왜 넣어 뒀는지 이제 알겠다.)'], bg: 'busstop', cfg: busCfg, color: IMC_COL.info, sec: 3.8 })], n);
+  }); });
+  if (miss.includes('id')) seq.push((n) => { let k = -1; E.runMinis([imLateAsk(E, { title: '신분증을 두고 나왔다', kicker: `${E.hm(M.clock)} · 지갑이 없다! · 모바일 신분증은 인정 안 됨`, icon: '🪪', lines: ['신분증이 없어도 응시는 할 수 있다 — 시험관리본부에 신고하고 본인 확인(사진 1장 → 임시 신분증).', '집으로 되돌아가면 왕복 16분.'], opts: [{ label: '집으로 되돌아가기', sub: '왕복 +16분' }, { label: '시험장 본부에 신고 · 임시 신분증', sub: '본인 확인 +6분' }], bg: 'busstop', cfg: busCfg, def: 1, bot: 1, onPick: (i) => { k = i; } })], () => {
+    if (k === 0) { step('신분증 가지러 되돌아감', 16); M.idWay = 'back'; imAlbum(E, '🪪', '신분증 가지러 다시 집으로'); return n(); }
+    M.reissue.push('id'); M.idWay = 'reissue'; n();
+  }); });
+  imLateSeq(seq, next);
+}
+function imLateReissue(E, M, step, next) {
+  const S = E.G.S, R = M.reissue || [];
+  if (!R.length) return next();
+  const both = R.includes('ticket') && R.includes('id');
+  E.runMinis([imLateNote(E, { kicker: `${E.hm(M.clock)} · 제12시험장 ○○고 · 시험관리본부`, icon: '🏢', title: R.includes('ticket') ? '수험표 재발급' : '임시 신분증', lines: R.includes('ticket') ? [both ? '신분증도 없다… 「신고하면 임시 수험표로 응시할 수 있어요.」' : '본부 선생님: 「원서 사진이랑 같은 사진 한 장, 신분증 주세요.」', '도장 쾅. 새 수험표 한 장.', M.clock < E.T('08:00') ? '08:00 전이라 다행. 「이제 시험실로 천천히 가요.」' : '「신고했으니 걱정 말고 시험실로 가요.」'] : ['본부 선생님: 「신분증 없어도 응시할 수 있어요. 여기 확인서 쓰고 사진 한 장.」', '임시 신분증 발급. 「감독관 선생님께 보여 드리면 돼요.」', '…심장이 이제야 조금 내려간다.'], bg: 'exam', cfg: { board: '시험관리본부' }, color: IMC_COL.info, sec: 4.6, stamp: R.includes('ticket') ? '재발급' : '임시 신분증', stampCol: '#2E3F86' })], () => {
+    step(R.map((k) => (k === 'ticket' ? '시험관리본부 수험표 재발급' : '시험관리본부 임시 신분증')).join(' + '), R.length * 6);
+    imAlbum(E, '🏢', R.includes('ticket') ? '시험관리본부에서 다시 받은 수험표' : '시험관리본부 임시 신분증');
+    next();
+  });
+}
+function imLatePolice(E, M, next) {
+  const S = E.G.S, bike = imLF('bike') || (!imLF('police') && imMornRoll(S, 1, 'bike') < 0.35);
+  M.policeKind = bike ? 'bike' : 'car';
+  const call = E.phoneMini('📞 112', [[1.5, 'm', '저… 수험생인데요, 버스가 꽉 막혀서… 08:10까지 ○○고에 가야 해요!'], [4.6, 'c', '수험생이시죠? 위치 확인됐어요. 근처 경찰 바로 보낼게요.'], [7.4, 'c', '수험표 · 신분증 챙겼죠? 정류장에서 기다리세요.'], [9.8, 'm', '네!! 감사합니다!!']], { end: 12.5 });
+  const ride = imLateBusCard(E, bike ? '🏍️ 경찰 오토바이 에스코트' : '🚓 수험생 수송 중', bike ? '택시 앞에서 길을 터 준다 · 비상등' : '순찰차 뒷좌석 · ○○고까지 10분', true);
+  E.runMinis([call, ride], () => E.say(bike ? [
+    { who: '나', text: '(택시 앞에 경찰 오토바이 두 대. 차들이 갈라진다…!)' },
+    { who: '택시 기사님', text: '30년 운전하면서 에스코트는 처음이네! 학생 꼭 붙어요!' },
+    { who: '경찰관', text: '(교문 앞에서 손짓) 다 왔어요! 뛰지 말고 걸어요, 넘어지면 큰일 나요!' },
+  ] : [
+    { who: '경찰관', text: '뒷자리에 핫팩 있어요. 이날은 매년 이래요. 다들 같은 마음이에요.' },
+    { who: '나', text: '(순찰차 뒷좌석… 인생 첫 순찰차가 수능날일 줄이야.)' },
+    { who: '경찰관', text: '도착! 뛰지 말고 걸어가요. 시험 잘 봐요, 학생.' },
+  ], () => { imAlbum(E, bike ? '🏍️' : '🚓', bike ? '수능날 아침, 경찰 오토바이 에스코트' : '순찰차 뒷좌석 「수험생 수송 중」'); next(); }));
+}
+function imLatePhoneCheck(E, next) {
+  const S = E.G.S, M = S.flags.morn1 || {};
+  const crisis = imLF('phone') || (M.decoys || []).includes('phone') || imMornRoll(S, 1, 'phoneCrisis') < 0.12;
+  if (!crisis) return next();
+  const packed = (M.decoys || []).includes('phone');
+  const exCfg = { board: '1교시 국어 08:40~10:00' };
+  let k = -1;
+  E.runMinis([imLateNote(E, { kicker: '08:2x · 입실 후 · 1교시 전 가방 정리', icon: '📵', title: '「전자기기 제출하세요」', lines: ['감독관: 「휴대폰 · 스마트워치 · 이어폰, 지금 전부 제출하세요.」', '「1교시 시작 뒤엔 시험 중이든 쉬는 시간이든 소지만 해도 부정행위입니다.」', packed ? '(가방 앞주머니… 휴대폰을 넣어 왔지.)' : '(외투 안주머니가 묵직하다…?)'], bg: 'exam', cfg: exCfg, color: IMC_COL.hot, sec: 4.8, style: 'tense' }),
+    imLateAsk(E, { title: '휴대폰이 아직 나한테 있다!', kicker: '08:2x · 1교시 시작 전', icon: '📱', lines: [packed ? '가방 앞주머니에 휴대폰. 전원도 켜져 있다.' : '외투 안주머니에 휴대폰! 엄마 문자 보고 그냥 넣었구나.', '가져왔다면 1교시 시작 전에 감독관에게 제출 → 시험이 다 끝나면 돌려받는다.'], opts: [{ label: '손 들고 감독관께 바로 제출', sub: '지금이라서 괜찮다' }, { label: '전원만 끄고 가방 깊숙이…', sub: '⚠ 1교시 뒤 적발 = 부정행위' }], bg: 'exam', cfg: exCfg, def: 0, bot: 0, onPick: (i) => { k = i; } })], () => {
+    const ok = k !== 1;
+    const tail = [imLateNote(E, { kicker: '08:3x · 제7시험실', icon: '✋', title: ok ? '「선생님, 휴대폰 제출할게요!」' : '…아니야, 지금 제출하자', lines: (ok ? [] : ['(혹시라도 울리면 1년이 끝이다.)']).concat(['감독관: 「네, 잘했어요. 봉투에 이름 쓰고 넣어요. 끝나고 돌려줄게요.」', '(심장이 아직 쿵쾅. 숨 크게 세 번. 국어 첫 지문은 화법.)']), bg: 'exam', cfg: exCfg, color: IMC_COL.act, sec: 4.2, stamp: '제출 완료', stampCol: '#1F7A4D' })];
+    E.runMinis(tail, () => { imApply(E, { mental: ok ? -2 : -5 }, '휴대폰 제출'); imAlbum(E, '📵', '1교시 전 휴대폰 제출 — 아슬아슬'); S.flags.phoneCrisis = ok ? 'ok' : 'self'; next(); });
+  });
+}
+function imLateBroadcast(E) {
+  const c = imLateNote(E, { kicker: '14:40 · 방송 · 4교시 전', icon: '📢', title: '4교시 안내 방송', lines: ['「한국사는 필수 — 응시하지 않으면 수능 성적 전체가 무효입니다.」', '「탐구는 해당 시간 과목 문제지만 책상 위에. 통합사회 시간엔 통합사회만.」', '「종료령이 울리면 즉시 펜을 놓으세요.」 (부정행위 1위 · 2위가 바로 이것)'], bg: 'exam', cfg: { board: '4교시 한국사 14:50~15:20' }, color: IMC_COL.chalk, sec: 5.2 });
+  c.board = '4교시 한국사 14:50~15:20';
+  return c;
+}
+function imLateAfterCsat(E) {
+  const S = E.G.S, M = S.flags.morn1 || {}, v = imVoc(S), R = S.csat && S.csat.R;
+  const pl = [`엄마: 「${v}! 여기! …고생했어. 진짜 고생했어.」`];
+  if (M.over) pl.push('엄마: 「아침에 엄마 목소리 엄청 컸지? 동네 사람들 다 깼을 거야.」');
+  if (M.transit === 'police') pl.push(M.policeKind === 'bike' ? '아빠: 「경찰 오토바이 에스코트라니, 아빠 평생 자랑할 거다.」' : '아빠: 「순찰차 탔다며? 경찰관님께 고맙다고는 했어?」');
+  if ((M.forgot || []).includes('ticket')) pl.push(M.ticketWay === 'back' ? '엄마: 「골목에서 수험표 건넬 때, 엄마 다리 후들거렸어.」' : '엄마: 「본부에서 재발급 잘 받았어? 원서 사진 넣어 둔 건 신의 한 수.」');
+  if (S.flags.phoneCrisis) pl.push('나: 「엄마, 나 아침에 휴대폰 제출했어. 문자 이제 봤어.」');
+  pl.push('아빠: 「점수는 안 물어볼게. 뭐 먹고 싶어? 오늘은 뭐든.」');
+  const lines = [{ who: imNpcName(E, 'mate1', '도윤'), text: '(카톡) 끝!!!!! 수학 22번 뭐 나옴?? 아 아니다 말하지 마' }, { who: '나', text: '수험표 뒷면에 적어 온 답. 집에 가서 가채점하자.' }];
+  E.runMinis([
+    imLateNote(E, { kicker: '17:10 · 4교시 종료', icon: '🔔', title: '수고하셨습니다', lines: ['감독관: 「시험 종료. 펜 내려놓으세요. 답안지 걷겠습니다.」', '제출했던 휴대폰을 돌려받았다. 알림 99+.', '교실 문을 나서는데 다리가 풀린다.'], bg: 'exam', cfg: { board: '2028학년도 수능 종료' }, color: IMC_COL.act, sec: 4.2 }),
+    (() => { const c = E.cardMini('교문 앞', '꽃 대신 핫팩을 든 사람들 · 엄마 · 아빠', null, 'street', 6); c.cfg = { night: true, caption: '○○고 교문 앞' }; return c; })(),
+    imLateNote(E, { kicker: '17:4x · ○○고 교문 앞', icon: '🌆', title: '엄마 · 아빠', lines: pl, bg: 'street', cfg: { night: true, caption: '○○고 교문 앞' }, color: IMC_COL.hr, sec: 6.2 }),
+  ], () => E.say(lines, () => { imAlbum(E, '🌆', '수능 끝, 교문 앞 엄마 아빠'); if (R) imApply(E, { mental: 6 }, '교문 앞', true); }));
+}
+function imLateCutMini(E, R) {
+  const S = E.G.S, raw = (k, d) => (R.subj && R.subj[k] && R.subj[k].raw != null ? R.subj[k].raw : d);
+  const base = (k) => Math.round(imSeed(`${S.examNo}|cut|${k}`) * 4);
+  const rows = [
+    { k: '국어', raw: raw('kor', 80), cut: [86, 88, 87].map((c) => c + base('kor') - 2), lo: 78, hi: 97 },
+    { k: '수학', raw: raw('math', 80), cut: [84, 85, 87].map((c) => c + base('math') - 2), lo: 76, hi: 97 },
+    { k: '탐구', raw: raw('tam', 40), cut: [44, 45, 44].map((c) => c + Math.round(base('tam') / 2) - 1), lo: 38, hi: 50 },
+  ];
+  return imMini(E, 'imCutMini', { rows, seed: S.examNo }, () => null);
+}
+
+/* ---- 12월: 수능 후 대학별 고사 · 성적표 배부 · 최저 판정 · 수시 발표 · 등록 · 예비 → 추합 ---- */
+function imLatePostCsat(E, next) {
+  const S = E.G.S, L = imLateSt(S), R = S.csat && S.csat.R, cards = (S.susi && S.susi.cards) || [];
+  if (!cards.length || S.csat && S.csat.late) return next();
+  const fresh = (x) => !(L.nonsul && L.nonsul[x.univ] != null), isNs = (x) => /논술/.test(x.type || ''), isHj = (x) => /학종|종합/.test(x.type || '');
+  const c = cards.find((x) => isNs(x) && fresh(x) && x.min) || cards.find((x) => isHj(x) && x.min) || cards.find((x) => isNs(x) && fresh(x)) || (imLF('skipexam') ? cards.find(isHj) : null);
+  if (!c) return next();
+  const kind = /논술/.test(c.type) ? '논술' : '면접';
+  const minLine = c.min ? (R ? (imMinOK(c.min, R) ? `가채점으로는 ${imMinText(c.min)} — 될 것 같은데, 영어가 아슬아슬.` : `가채점으로는 ${imMinText(c.min)} — 한 등급이 모자랄 수도.`) : `최저 ${imMinText(c.min)}`) : '최저 없음 — 실력 그대로 승부.';
+  const why = c.min ? '최저를 못 맞추면 시험을 잘 봐도 불합격.' : '수능 끝나고 이틀. 몸이 천근만근.';
+  let pick = -1;
+  E.runMinis([imLateNote(E, { kicker: '11월 20일(토) · 수능 후 첫 주말', icon: kind === '논술' ? '✍️' : '🎤', title: `${c.univ} ${kind}`, lines: [minLine, why, '가야 할까? 결시하면 그 원서는 그대로 끝.'], bg: 'street', cfg: { caption: '대학 정문 · 수험생 행렬' }, color: IMC_COL.purple, sec: 4.6 }),
+    imLateAsk(E, { title: `${kind} 보러 갈까?`, kicker: `${c.univ} · 수능 후 대학별 고사`, icon: kind === '논술' ? '✍️' : '🎤', lines: [minLine, '결시하면 그 원서는 그대로 불합격.'], opts: [{ label: '그래도 간다', sub: '응시해야 결과가 있다' }, { label: '포기하고 쉰다', sub: c.min ? '최저 안 될 것 같아' : '너무 지쳤어' }], bg: 'street', cfg: { caption: '대학 정문' }, style: null, def: 0, bot: imLF('skipexam') ? 1 : 0, onPick: (i) => { pick = i; } })], () => { const opt = [
+    { fn: () => {
+      const m = kind === '논술' ? imMini(E, 'imNonsulMini', { univ: c.univ, major: S.major, time: '14:00~16:00', onEnd: (s) => { L.nonsul = L.nonsul || {}; L.nonsul[c.univ] = s; } }, () => null)
+        : imMini(E, 'imInterviewMini', { english: false, track: 'hakjong', major: S.major, majorName: imMajorOf(E).name, univ: c.univ, exam: true, saeng: S.saeng, onEnd: (s) => { S.interview = Math.max(S.interview || 0, E.clamp(s, 0, 1)); } }, () => null);
+      E.runMinis([m].filter(Boolean), () => { imApply(E, { hp: -5, mental: 3 }, `수능 후 ${kind}`); imAlbum(E, kind === '논술' ? '✍️' : '🎤', `수능 끝나고도 ${c.univ} ${kind}`); E.say([{ who: '나', text: '끝까지 가 봤다. 이제 정말 12월 10일만 남았다.' }], next); });
+    } },
+    { fn: () => { L.skip = L.skip || {}; L.skip[c.univ] = 1; imApply(E, { hp: 6, mental: -3 }, `${kind} 결시`); imAlbum(E, '🛌', `${c.univ} ${kind} 결시 — 이불 속 가채점표`); E.say([{ who: '엄마', text: '쉬어도 돼. 네가 판단한 거면 엄마는 믿어.' }, { who: '나', text: c.min ? '(…12월 10일에 최저가 됐다고 나오면 어쩌지. 그건 그때 생각하자.)' : '(그 대신 나머지 원서에 마음을 모으자.)' }], next); } },
+  ]; opt[pick === 1 ? 1 : 0].fn(); });
+}
+function imLateScoreDay(E, next) {
+  const S = E.G.S, R = S.csat && S.csat.R, hr = S.nth > 1 ? '재종 담임' : imHR(E);
+  const L = imSusiResults(E) || [];
+  E.runMinis([imLateNote(E, { kicker: `12월 10일(금) · ${S.nth > 1 ? '재종반 교실' : '3학년 교실'}`, icon: '📄', title: '성적표 배부', lines: [`${hr}: 「이름 부르면 한 명씩 나와. 표준점수 · 백분위 · 등급.」`, '「영어 · 한국사는 등급만이야. 숫자는 숫자일 뿐이다.」', `${imName(S) === '나' ? '내' : imName(S) + '의'} 이름이 불렸다.`], bg: 'classroom', cfg: { board: '12/10 수능 성적 통지' }, color: IMC_COL.info, sec: 4.4 })], () => {
+    imCard(E, imScoreCard(E, R, '2028학년도 수능 성적표', `12월 10일 · 성적 통지 · ${imName(S)}`) + `<div class="brief"><div>가중 백분위 <b>${R.avgPct}</b> · 국수탐 표점 합 <b>${R.stdSum}</b></div><div>${E.esc(hr)}: 「수고했다. 진짜로.」</div></div>`, () => {
+      imAlbum(E, '📄', '수능 성적표 (등급·표점·백분위)');
+      const rows = L.map((x) => ({ univ: x.univ, type: x.type || '', minText: imMinText(x.min), none: !x.min, ok: !x.min || imMinOK(x.min, R) }));
+      if (!rows.some((r) => !r.none)) return next();
+      E.runMinis([imMini(E, 'imMinCheckMini', { rows, grades: imGradeStr(R) }, () => null)].filter(Boolean), next);
+    });
+  });
+}
+function imLateRefreshMini(E, c, label) {
+  const S = E.G.S, res = c.res === 'pass' ? 'pass' : c.res === 'wait' ? 'wait' : 'fail';
+  return imMini(E, 'imRefreshMini', { pass: res === 'pass', result: res, label, univ: c.univ, waitNo: c.waitNo, queue: 260 + Math.round(imSeed(`${S.examNo}|rq|${c.univ}`) * 500), failText: c.res === 'minfail' ? '최저 미충족' : c.absent ? '결시' : '불합격', name: S.name || '', no: S.examNo || '', onEnd: () => {} }, () => E.cardMini(label, c.univ, null, 'result', 4));
+}
+function imLateSusiSeries(E, done) {
+  const S = E.G.S, R = S.csat && S.csat.R, esc = E.esc, LS = imLateSt(S);
+  const L = imSusiResults(E);
+  if (!L) return done();
+  E.G.min = E.T('13:00');
+  const days = [12, 14, 15, 16, 17, 21];
+  const order = L.slice().sort((a, z) => (imSeed(`${S.examNo}|day|${a.univ}`) - imSeed(`${S.examNo}|day|${z.univ}`)));
+  order.forEach((x, i) => { x.day = imLateDate(S, 12, days[Math.min(i, days.length - 1)]); if (x.res === 'wait' && !x.waitNo) x.waitNo = 3 + Math.floor(imSeed(`${S.examNo}|wn|${x.univ}`) * 16); });
+  const cal = imLateNote(E, { kicker: '12월 · 수시 합격자 발표 달력', icon: '🗓️', title: `발표 ${order.length}번`, lines: order.map((x) => `${x.day} · ${x.univ} (${x.type})`), bg: 'bedroom', cfg: { night: true }, color: IMC_COL.info, sec: 4.4 });
+  E.runMinis([cal].concat(order.map((x) => imLateRefreshMini(E, x, `수시 · ${x.day}`))), () => {
+    const trT = { hakjong: '학종', gyogwa: '교과' }[S.track] || '';
+    const pass = L.filter((x) => x.res === 'pass').sort((a, z) => imTierRank(a.tier) - imTierRank(z.tier) || (z.type === trT) - (a.type === trT));
+    const minF = L.filter((x) => x.res === 'minfail').length;
+    if (!pass.length && L.every((x) => x.res === 'fail' || x.res === 'minfail')) S.flags.sixFail = L.length >= 6;
+    if (!pass.length && minF) imAlbum(E, '📉', '최저 미충족 — 한 과목 한 등급');
+    const rows = L.map((x) => [esc(x.univ), esc(x.type), imLateTierTxt(x.tier), esc(imMinText(x.min)), `<b style="color:${IMC_RES_TXT[x.res][1]}">${x.absent ? '결시' : x.res === 'wait' ? `예비 ${x.waitNo}번` : IMC_RES_TXT[x.res][0]}</b>`]);
+    const lost = S.susi.lost ? `<div style="font-size:11.5px">(9월에 결제 못 한 ${esc(S.susi.lost.univ)} — 지원 안 됨)</div>` : '';
+    imCard(E, `<div class="eb">12월 · 수시 합격자 발표</div><h2 style="font-size:26px">${pass.length ? `합격 ${pass.length}장!` : minF ? '최저가 발목을…' : L.some((x) => x.res === 'wait') ? '예비 번호…' : `수시 ${L.length}장`}</h2>${imTable(E, ['대학', '전형', '지원', '최저', '결과'], rows)}<div class="brief"><div>${pass.length ? '합격 화면을 열 번은 캡처했다. 이제 등록할 곳을 정해야 한다.' : minF ? `최저 미충족 ${minF}장. 서류·면접은 통과였는데.` : L.some((x) => x.res === 'wait') ? '예비 번호. 아직 끝이 아니다 — 12월 31일까지.' : '아직 끝이 아니다. 정시가 남았다.'}</div>${lost}</div>`, () => {
+      const waitAfter = () => {
+        const reg = S.susiPass, waits = L.filter((x) => x.res === 'wait' && (!reg || imTierRank(x.tier) < imTierRank(reg.tier))).sort((a, z) => imTierRank(a.tier) - imTierRank(z.tier));
+        if (!waits.length || S.flags.regNo) return done();
+        imLateWaitlist(E, waits[0], 'susi', done);
+      };
+      if (pass.length) return imLateRegister(E, pass, waitAfter);
+      waitAfter();
+    });
+  });
+}
+function imLateRegister(E, passes, done) {
+  const S = E.G.S, top = passes.slice(0, 3), no = imLF('regno');
+  imChoice(E, { id: 'lateReg', title: '등록할 대학 — 한 곳만', sub: '수시 등록 12/22~24 · 이중 등록 금지', who: '입학처 안내', text: '수시에 합격하면 <b>등록하지 않아도 정시 · 추가모집 지원 불가</b> (최초합 · 추합 모두). 복수 합격이면 <b>한 곳에만</b> 등록.', opts: top.map((c, i) => ({ label: `${c.univ} 등록`, sub: `${c.type} · ${imLateTierTxt(c.tier)}${i === 0 ? ' · 제일 가고 싶던 곳' : ''}`, bot: no ? -5 : 5 - i, fn: () => {
+    S.susiPass = c; imMental(E, 20);
+    imAlbum(E, '🎉', `${c.univ} 수시 합격 · 등록 완료`);
+    E.say([{ who: '나', text: `${c.univ} 등록 완료. …수시로 끝났다. 정시는 이제 못 쓴다.` }, { who: '엄마', text: '(부엌에서 소리 지름) 여보!! 여보!!!' }, { who: '나', text: '(등록금 고지서를 냉장고에 붙였다. 엄마가.)' }], done);
+  } })).concat([{ label: '등록하지 않기 — 한 번 더 도전', sub: '정시도 못 씀 · 내년 수능(재수)', bot: no ? 9 : -3, fn: () => {
+    S.flags.regNo = 1; S.susiPass = null; imMental(E, -4);
+    imAlbum(E, '🔁', '합격 화면을 닫고, 재수 결심');
+    E.say([{ who: '나', text: '붙은 걸 내려놓는 건… 생각보다 무섭다.' }, { who: '엄마', text: '쉬운 결정 아닌 거 알아. 엄마는 네가 고른 길이면 돼.' }, { who: '나', text: '(올해는 정시도 못 쓴다. 다시 2월부터, 내 속도로.)' }], done);
+  } }]) });
+}
+function imLateWaitlist(E, card, kind, done) {
+  const S = E.G.S, LS = imLateSt(S), force = (window.__im && window.__im.force) || {};
+  const got = force.chuhap != null ? !!force.chuhap : kind === 'susi' ? imSeed(`${S.examNo}|chu|${S.nth}|${card.univ}`) < 0.55 : imSeed(`${S.examNo}|jchu|${S.nth}|${card.univ}`) < 0.5 + (card.margin || 0) * 0.12;
+  const no = Math.max(2, card.waitNo || (kind === 'susi' ? 9 : Math.round(Math.abs(card.margin || 1) * 4) + 3));
+  const days = kind === 'susi' ? ['12/22 등록 마감', '12/23 1차 충원', '12/27 2차 충원', '12/29 3차 충원', '12/30 전화 충원', '12/31 마지막 날'] : ['2/14 등록 마감', '2/15 1차 충원', '2/17 2차 충원', '2/18 3차 충원', '2/19 전화 충원', '2/20 마지막 날'];
+  const dead = E.clamp(1 + Math.floor(imSeed(`${S.examNo}|dead|${card.univ}`) * 3), 1, Math.max(1, no - 1));
+  const label = kind === 'susi' ? '수시 충원' : `정시 ${card.gun || ''}군 충원`;
+  const prev = kind === 'susi' ? S.susiPass : null;
+  E.runMinis([imMini(E, 'imWaitMini', { univ: card.univ, no, got, days, dead, label, callAt: kind === 'susi' ? '21:03' : '20:47', endText: kind === 'susi' ? '12/31 · 충원 마감' : '2/20 · 충원 마감' }, () => E.cardMini(`예비 ${no}번`, card.univ, 'tense', 'result', 5))], () => {
+    if (!got) {
+      LS.waitMiss = { kind, univ: card.univ, no, stop: dead };
+      imAlbum(E, '🌙', `${card.univ} 예비 ${no}번 → ${dead}번에서 멈춤`);
+      imMental(E, -8);
+      return E.say([{ who: '나', text: `예비 ${no}번… ${dead}번에서 멈췄다. 한 끗.` }, { who: imNpcName(E, 'mate1', '도윤'), text: '(카톡) 예비 번호는 운이야. 네 실력이 모자란 게 아니라.' }], done);
+    }
+    const missFirst = imLF('callmiss');
+    const callLines = [[1.5, 'c', `${imName(S) === '나' ? '수험생' : imName(S)} 학생 본인 맞으시죠? ${card.univ} 입학처입니다.`], [4.4, 'c', `${kind === 'susi' ? '수시' : (card.gun || '') + '군'} 충원 합격입니다. 등록하시겠어요?`], [7.4, 'c', '오늘 마감 전까지 등록 의사를 확인 못 하면 다음 순위로 넘어가요.'], [10.2, 'm', '…네! 네!! 등록할게요!!']];
+    const minis = [];
+    if (missFirst) minis.push(imLateNote(E, { kicker: `${kind === 'susi' ? '12/31' : '2/20'} · 21:01`, icon: '📵', title: '부재중 전화 1통', lines: ['…샤워 중이었다. 지퍼백 속 휴대폰에 「부재중 02-○○○-○○○○」.', '「3회 이상 연락이 안 되면 다음 순위로 넘어갈 수 있다」', '제발, 한 번만 더…!'], bg: 'bedroom', cfg: { night: true }, color: IMC_COL.hot, sec: 4.4, sfx: 'bad', shake: 0.3 }));
+    minis.push(E.ringMini(`${card.univ} 입학처`), E.phoneMini(`${card.univ} 입학처`, callLines, { end: 13 }));
+    E.runMinis(minis, () => {
+      const accept = () => {
+        if (kind === 'susi') { S.susiPass = Object.assign({}, card, { res: 'pass', chuhap: true, from: prev ? prev.univ : null }); }
+        else S.jungsiPass = Object.assign({}, card, { chuhap: true });
+        S.flags.chuhap = 1; imMental(E, 22);
+        imAlbum(E, '☎️', `${card.univ} 추합 전화 — 모르는 번호는 꼭 받기`);
+        E.say((prev ? [{ who: '나', text: `${prev.univ} 등록 포기(환불) 신청 → ${card.univ} 등록. 손이 덜덜 떨렸다.` }] : []).concat([{ who: '엄마', text: '(문 밖에서 다 들음) …진짜야? 진짜지?!' }, { who: '나', text: `${missFirst ? '부재중 뜬 순간 심장이 멈췄는데… 다시 걸어 주셨어.' : '모르는 번호는 꼭 받기. 평생 교훈.'}` }]), done);
+      };
+      if (!prev) return accept();
+      imChoice(E, { id: 'lateChu', title: '추합 — 등록하시겠어요?', sub: `${card.univ} · 오늘 마감`, who: `${card.univ} 입학처`, text: `지금 등록한 곳: <b>${E.esc(prev.univ)}</b> → 충원 합격 대학 등록하려면 <b>기존 등록 포기(환불)</b>`, opts: [
+        { label: `${card.univ}로 옮기기`, sub: `${imLateTierTxt(card.tier)} · 기존 등록 포기`, bot: 5, fn: accept },
+        { label: `${prev.univ}에 남기`, sub: '이미 마음이 정해졌다', bot: 0, fn: () => { imAlbum(E, '🙂', `${card.univ} 추합을 정중히 사양`); E.say([{ who: '나', text: '감사하지만… 저는 지금 학교로 갈게요.' }, { who: '입학처', text: '네, 축하드려요. 다음 순위 학생에게 연락할게요.' }], done); } },
+      ] });
+    });
+  });
+}
+function imLateDec(E) {
+  const S = E.G.S, R = S.csat && S.csat.R;
+  E.G.min = E.T('09:00');
+  const afterSusi = () => {
+    E.G.min = Math.max(E.G.min, E.T('13:20'));
+    if (S.susiPass) return E.say([{ who: '나', text: `${S.susiPass.univ}. 수시로 끝났다 — 정시는 지원할 수 없다 (「수시납치」 아니고, 내가 고른 길).` }, { who: '나', text: '2월 졸업식까지, 오늘은 일단 실컷 자자.' }]);
+    if (S.flags.regNo) return E.say([{ who: '나', text: '정시 원서 칸은 비워 둔다. 내년 2월, 세대인재 레벨테스트부터.' }]);
+    if (R) { const q = { id: 'q-jungsi', title: '정시 원서 가·나·다', at: 'door:room', icon: '🧾', color: IMC_COL.hot, cat: '마감', dueAt: '18:00' }; E.addQuest(Object.assign({}, q, { due: E.dueAt(0, q.dueAt) })); E.say([{ who: '나', text: '정시 원서. 가·나·다 세 칸. 내 방 노트북에서, 18시 전에.' }, { who: imHR(E), text: '(문자) 모의지원 「칸」은 참고만. 같은 군에 두 곳 쓰면 무효야. 1월 3~6일 접수!' }]); }
+  };
+  const steps = [(n) => imLatePostCsat(E, n)];
+  if (R) steps.push((n) => imLateScoreDay(E, n));
+  steps.push((n) => imLateSusiSeries(E, n));
+  imLateSeq(steps, afterSusi);
+}
+function imLateKanNote(E, R) {
+  const S = E.G.S, base = Math.round(imSeed(`${S.examNo}|kan`) * 3);
+  return imLateNote(E, { kicker: '정시 원서 · 1월 3~6일 · 밤마다 바뀌는 칸', icon: '📱', title: '칸 수 고민', lines: [`모의지원 「칸」 — 어제 밤 가군 ${5 + base}칸 → 오늘 ${4 + base}칸.`, `내 백분위 평균 ${R.avgPct}. 가군 소신 · 나군 적정 · 다군 안정이 국룰이래.`, '같은 군에 두 곳 = 입학 무효. 칸은 예측일 뿐!'], bg: 'bedroom', cfg: { night: true }, color: IMC_COL.chalk, sec: 4.6 });
+}
+
+/* ---- 2월: 정시 군별 발표 · 정시 추합 마지막 날 · 졸업식 ---- */
+function imLateFeb(E) {
+  const S = E.G.S, LS = imLateSt(S);
+  E.G.min = E.T('09:50');
+  const endFail = () => imLateGraduate(E, () => {
+    if (LS.waitMiss && (LS.waitMiss.kind === 'jungsi' || !(S.jungsi && S.jungsi.results))) return imEnding(E, 'waitmiss');
+    const L = imSusiResults(E) || [];
+    imEnding(E, L.some((x) => x.res === 'minfail') ? 'minfail' : L.length >= 6 && L.every((x) => x.res !== 'pass') ? 'sixfail' : 'jaesu');
+  });
+  if (S.flags.regNo) return imLateGraduate(E, () => imEnding(E, 'regno'));
+  if (S.susiPass) {
+    const c = S.susiPass, kind = c.chuhap ? 'chuhap' : /교과/.test(c.type) ? 'gyogwa' : /학종|종합/.test(c.type) ? 'hakjong' : 'susi';
+    return imLateGraduate(E, () => E.runMinis([E.phoneMini('엄마', [[1.5, 'c', `${imVoc(S)}, 입학 서류 다 챙겼지?`], [4, 'm', '응. 엄마, 나 진짜 대학생 되나 봐.'], [6.5, 'c', `우리 ${imKid(S)}… 고생했다, 진짜 고생 많았어.`]], { end: 9 })], () => imEnding(E, kind)));
+  }
+  const J = imJungsiJudge(E);
+  if (!J) return endFail();
+  J.forEach((x) => { if (x.res === 'wait' && !x.waitNo) x.waitNo = Math.min(29, Math.max(2, Math.round(Math.abs(x.margin) * 4) + 2 + Math.floor(imSeed(`${S.examNo}|jwn|${x.gun}`) * 7))); });
+  const dates = { 가: '2/2', 나: '2/5', 다: '2/9' };
+  E.runMinis(J.map((x) => imLateRefreshMini(E, x, `정시 ${x.gun}군 · ${dates[x.gun] || '2월'}`)), () => {
+    const passes = J.filter((x) => x.res === 'pass').sort((a, z) => z.cut - a.cut);
+    const rows = J.map((x) => [x.gun + '군', E.esc(x.univ), `${x.cut}`, `<b style="color:${IMC_RES_TXT[x.res][1]}">${x.res === 'wait' ? `예비 ${x.waitNo}번` : IMC_RES_TXT[x.res][0]}</b>`]);
+    imCard(E, `<div class="eb">2월 · 정시 합격자 발표</div><h2 style="font-size:26px">${passes.length ? `${E.esc(passes[0].univ)} 합격!` : J.some((x) => x.res === 'wait') ? '예비 번호를 받았다' : '정시 가·나·다'}</h2>${imTable(E, ['군', '대학', '예상 컷(백분위)', '결과'], rows)}<div class="brief"><div>등록 2/11~14 · 충원(추합) 마감 2/20.</div></div>`, () => {
+      const win = (p) => { S.jungsiPass = p; imAlbum(E, '🌸', `${p.univ} 정시 합격 화면`); E.runMinis([E.phoneMini('엄마', [[1.5, 'm', '엄마… 나 붙었어.'], [3.6, 'c', `…뭐? ${imVoc(S)}, 진짜? 진짜로?`], [6, 'c', `아이고 우리 ${imKid(S)}… 고생했다, 고생 많았어…`], [8.6, 'm', '응… 엄마 덕분이야.']], { end: 11 })], () => imLateGraduate(E, () => imEnding(E, 'jungsi'))); };
+      if (passes.length >= 2) return imChoice(E, { id: 'lateJReg', title: '정시 등록 — 한 곳만', sub: '등록 2/11~14', who: '입학처 안내', text: '복수 합격이면 <b>한 곳에만</b> 등록 (이중 등록 금지)', opts: passes.slice(0, 3).map((p, i) => ({ label: `${p.gun}군 ${p.univ} 등록`, sub: i === 0 ? '컷이 제일 높은 곳' : '', bot: 5 - i, fn: () => win(p) })) });
+      if (passes.length) return win(passes[0]);
+      const wait = J.filter((x) => x.res === 'wait').sort((a, z) => z.margin - a.margin)[0];
+      if (!wait) return endFail();
+      imLateWaitlist(E, wait, 'jungsi', () => (S.jungsiPass ? imLateGraduate(E, () => imEnding(E, 'chuhap')) : endFail()));
+    });
+  });
+}
+function imLateGraduate(E, done) {
+  const S = E.G.S;
+  if (S.nth > 1 || S.track === 'voc') return imGraduate(E, done);
+  const m1 = imNpcName(E, 'mate1', '도윤'), m2 = imNpcName(E, 'mate2', '서아'), m3 = imNpcName(E, 'mate3', '하준'), r = (k) => imSeed(`${S.examNo}|grad|${k}`);
+  const pick = (k, L) => L[Math.floor(r(k) * L.length)];
+  const mine = S.susiPass ? `나는 ${S.susiPass.univ}${S.susiPass.chuhap ? ' — 추합 전화 받았어!' : '!'}` : S.jungsiPass ? `나는 ${S.jungsiPass.univ}${S.jungsiPass.chuhap ? ' — 마지막 날 추합 전화!' : ' 정시!'}` : S.flags.regNo ? '나는… 붙은 데 내려놓고 한 번 더 해 보려고.' : '나는… 아직이야. 한 번 더 해 볼까 생각 중.';
+  const lines = [
+    { who: m1, text: pick('d', ['나 정시 나군 붙었다! 수능 하루에 건 1년, 해냈다 ㅋㅋ', '나 재수한다! 세대인재 레벨테스트 붙음 ㅋㅋ 내년엔 내가 국밥 산다', '다군 추합 마지막 날 전화 왔어!! 샤워하다 뛰어나옴']) },
+    { who: m2, text: pick('s', ['학종 최초합! 면접 때 네가 해 준 꼬리 질문 그대로 나왔어.', '예비 4번이었는데 12월 31일에 추합 전화 왔어. 아직도 손 떨려.', '최저 한 끗 모자랐어. 그래도 정시로 붙었어 — 우리 둘 다 잘 버텼다.']) },
+    { who: m3, text: pick('h', ['교과로 붙었어. 정리본 나눠 준 거 다들 고마워했대.', '나 반수 고민 중. 일단 대학 가서 생각해 보려고.', '간호학과 추합! 엄마가 나보다 더 울었어.']) },
+    { who: '나', text: mine },
+    { who: m2, text: S.susiPass || S.jungsiPass ? '축하해!! 진짜 축하해.' : '너는 내가 아는 사람 중에 제일 오래 버틴 사람이야. 그거면 됐어.' },
+    { who: m1, text: '단톡방 나가지 마라. 어디 있든 1년 뒤에 국밥.' },
+    { who: imHR(E), text: '어디에 있든, 무슨 결과든, 너희는 이미 충분히 잘 버텼다. 졸업 축하해.' },
+  ];
+  const cer = { banner: '졸업을 축하합니다', confetti: true };
+  E.runMinis([E.cardMini('졸업식', '강당 · 꽃다발 · 롤링페이퍼', null, 'ceremony', 6),
+    imLateNote(E, { kicker: '졸업식 끝 · 강당 뒤편', icon: '💐', title: '각자의 2월', lines: lines.slice(0, 5).map((l) => `${l.who}: 「${l.text}」`), bg: 'ceremony', cfg: cer, color: IMC_COL.hr, sec: 7 }),
+    imLateNote(E, { kicker: '3학년 ○반 · 졸업 사진', icon: '📸', title: '「수능 끝!」 하나 둘 셋', lines: [`${lines[6].who}: 「${lines[6].text}」`, '각자의 결과는 다 달라도, 사진 속 표정은 다 같았다.', `${m1} · ${m2} · ${m3} · 나 — 롤링페이퍼 맨 위에 「1년 뒤 국밥」.`], bg: 'ceremony', cfg: cer, color: IMC_COL.chalk, sec: 5.6 }),
+  ], () => { imAlbum(E, '💐', '졸업식 꽃다발과 롤링페이퍼'); E.say([lines[5]], done); });
 }
 
 /* ===== g3-core.js ===== */
@@ -7670,6 +8567,7 @@ function imConsultAt(E, s) {
   const last = S.mockHistory.filter((x) => x.nth === S.nth).slice(-1)[0];
   const gtxt = last ? `${last.label} 국${last.grades.kor} 수${last.grades.math} 영${last.grades.eng} 탐${last.grades.tam}` : '아직 모의 성적 없음';
   const ns = imNaesinAvg(S);
+  if (S.mi === IM_MI.AUG && S.nth === 1 && imLateOn(S)) return imLateAugConsult(E, s, done); // 하반기 확장 (g3-late.js)
   if (S.mi === IM_MI.AUG || S.mi === IM_MI.SEP || S.nth > 1) {
     return E.say([{ who: hr, text: `${imName(S) === '나' ? '' : imName(S) + ', '}수시 원서는 6장이야. 보통 상향 2 · 적정 2 · 안정 2.` }, { who: hr, text: `${mj.name.replace(/ 계열$/, "")} 계열이면 최저는 대략 ${imMinText(mj.min)}. 지금 ${gtxt}, 내신 ${ns.toFixed(2)}.` }, { who: hr, text: t.id === 'jungsi' ? '정시파이터라도 수시 6장은 기회야. 논술이나 학종 상향 몇 장은 써 봐.' : '원서는 9월 접수 주간 마감 시각 꼭 확인하고. 엄마랑도 상의해.' }, { who: '나', text: '(6장… 숫자 하나에 1년이 걸려 있다.)' }], () => { imApply(E, { mental: 2 }, '원서 상담'); imAlbum(E, '🗂️', '담임 쌤이 그려 준 원서 6칸'); done(); });
   }
@@ -7921,6 +8819,7 @@ function imRunEvent(E, id) {
   if (!imEvOK(E, ev, id)) return;
   if (S.nth > 1 && !(ev.tag === 'family' || ev.pool) ) return; // 재수생: 학교 행사 사건은 건너뜀
   if (S.mi === IM_MI.CSAT && !S.csat) return; // 수능 아침 사슬 중엔 사건 없음
+  if (typeof ev.run === 'function') return ev.run(E); // 직접 연출하는 사건 (g3-late.js)
   const intro = (ev.lines || []).map((l) => { const [w, x] = Array.isArray(l) ? l : [l.who, l.text]; return { who: imWho(w), text: w === '엄마' && /^(밥은|목소리가|오늘)/.test(x) ? `${imVoc(S)}, ${x}` : String(x || '').replace(/\{voc\}/g, imVoc(S)).replace(/\{name\}/g, imName(S)) }; });
   const opts = (ev.choices || []).map((c, i) => {
     const cost = c.cost || {}, gain = c.gain || {};
@@ -7987,8 +8886,8 @@ function imNormCards(E, raw) {
   const L = (Array.isArray(raw) ? raw : []).filter(Boolean).slice(0, 6).map((c, i) => {
     const tierRaw = String(c.tier || c.level || c.kind || '').toLowerCase();
     const tier = /up|상향/.test(tierRaw) ? 'up' : /safe|안정/.test(tierRaw) ? 'safe' : /fit|적정/.test(tierRaw) ? 'fit' : def[i].tier;
-    let min = c.min !== undefined ? c.min : c.minimum !== undefined ? c.minimum : def[i].min;
-    if (typeof min === 'string') { const mm = /(\d)\s*합\s*(\d+)/.exec(min); min = mm ? { n: +mm[1], sum: +mm[2], hist: /한국사\s*(\d)/.test(min) ? +/한국사\s*(\d)/.exec(min)[1] : undefined } : null; }
+    let min = c.minRule && c.minRule.n ? Object.assign({}, c.minRule) : c.min !== undefined ? c.min : c.minimum !== undefined ? c.minimum : def[i].min; // 원서 미니 카드의 규칙 객체 우선 (「3개 합 4」 같은 문구도 파싱)
+    if (typeof min === 'string') { const mm = /(\d)\s*개?\s*합\s*(\d+)/.exec(min); min = mm ? { n: +mm[1], sum: +mm[2], hist: /한국사\s*(\d)/.test(min) ? +/한국사\s*(\d)/.exec(min)[1] : undefined } : null; }
     if (min === true) min = Object.assign({}, mj.min);
     const un = c.univ || c.name || c.title, full = un ? `${imUnivShort(un)}${c.dept && !String(un).includes(c.dept) ? ' ' + c.dept : ''}` : def[i].univ;
     const info = imUnivInfo(E, full);
@@ -7999,6 +8898,7 @@ function imNormCards(E, raw) {
 function imWonseo(E, q) {
   const S = E.G.S, t = imTrackOf(E), mj = imMajorOf(E);
   if (S.susi && S.susi.cards && S.susi.cards.length) return E.say([{ who: '원서 접수 사이트', text: '이미 6장 접수 완료. (접수번호 캡처 여섯 장)' }], () => E.completeQuest(q.id));
+  if (imLateOn(S)) return imLateWonseo(E, q); // 마지막 날 · 접속 대기 · 결제 · 저장 실수 위기 (g3-late.js)
   const last = S.mockHistory.filter((x) => x.nth === S.nth && x.kind === '모평').slice(-1)[0] || S.mockHistory.slice(-1)[0];
   let res = null;
   const mini = imMini(E, 'imWonseoMini', { track: S.track, major: S.major, majorName: mj.name, univs: imUnivObjs(E), scores: { naesin: imNaesinAvg(S), saeng: Math.round(S.saeng), setuk: Math.round(S.saeng), mock: last ? Math.round(['kor', 'math', 'eng', 'tam'].reduce((a, k) => a + last.grades[k], 0) / 4 * 10) / 10 : 3.5, grades: last ? last.grades : null, pct: last ? last.pct : null, min: mj.min }, name: S.name || '', onEnd: (sc, m) => { res = m; } },
@@ -8025,7 +8925,8 @@ function imJungsiApply(E, q) {
     imAlbum(E, '🧾', '정시 원서 가·나·다 세 칸');
     E.say([{ who: '나', text: `가군 ${cards[0].univ}, 나군 ${cards[1].univ}, 다군 ${cards[2].univ}. …이제 2월까지 기다림.` }]);
   };
-  if (mini) E.runMinis([mini], fin); else fin();
+  const pre = imLateOn(S) ? [imLateKanNote(E, R)] : [];
+  if (mini) E.runMinis(pre.concat([mini]), fin); else fin();
 }
 function imNormJungsi(E, raw, R) {
   const U = imUnivList(E), p = R.avgPct, adj = imMajorOf(E).cut * 0.4;
@@ -8083,11 +8984,12 @@ function imMornMsgs(E) {
   return [{ who: '엄마', text: `${v}, 도시락 가방에 넣었어. 보온도시락이라 따뜻할 거야 🍱` }, { who: '아빠', text: '천천히. 아는 것만 다 맞히면 된다.' }, { who: '엄마', text: '떨리면 숨 크게 세 번. 엄마가 기도할게.' }, { me: true, text: '응, 다녀올게!' }];
 }
 function imMorning(E, stage) {
-  const S = E.G.S, D = E.G.D, mode = imMornMode(), F = imMornForce(), roll = (k) => imMornRoll(S, stage, k);
+  const S = E.G.S, D = E.G.D, mode = imMornMode(), F = Object.assign({}, imMornForce(), imLateMornForce(S)), roll = (k) => imMornRoll(S, stage, k);
   const dl = imDeadline(E);
   const M = D.morning = { stage, dl, clock: E.T(IMC_MORN.alarm), log: [], over: 0, forgot: [], decoys: [], transit: null, venue: null };
   const step = (txt, add = 0) => { M.log.push(`${E.hm(M.clock)} ${txt}${add ? ` (+${add}분)` : ''}`); M.clock += add; };
   const seq = [];
+  if (imLateOn(S) && !S.flags.precall) seq.push((next) => imLatePreCall(E, next)); // 11/17 예비소집 (회상)
   if (!S.flags['eve' + stage]) seq.push((next) => imEveRun(E, stage, true, next));
   seq.push((next) => { // 1. 늦잠
     const cram = S.flags['eve' + stage] === 'cram';
@@ -8117,16 +9019,17 @@ function imMorning(E, stage) {
     E.runMinis([imMini(E, 'imPackMini', { clock: M.clock, dl, items: imMornItems(E, stage), needText: '수험표 · 신분증 · 아날로그 시계 · 도시락 · 수정테이프', stage, csat: true, add: IMC_MORN.pack, onEnd: (sc, m) => { P = { missing: m.missing || [], decoys: m.decoys || [] }; } }, () => E.cardMini('준비물', '수험표 · 신분증 · 아날로그 시계 · 도시락', null, 'bedroom', 3))], () => {
       P = P || { missing: [], decoys: [] };
       step('준비물 챙기기', IMC_MORN.pack);
-      const miss = P.missing, dec = P.decoys;
-      if (miss.includes('id')) { step('신분증 두고 나옴 → 되돌아감', IMC_MORN.detour); imAlbum(E, '🪪', '신분증 두고 나와서 다시 집으로'); }
-      if (miss.includes('ticket')) step('수험표 없음 → 시험장 본부 재발급', IMC_MORN.ticket);
+      const miss = P.missing, dec = P.decoys, late = imLateOn(S);
+      if (!late && miss.includes('id')) { step('신분증 두고 나옴 → 되돌아감', IMC_MORN.detour); imAlbum(E, '🪪', '신분증 두고 나와서 다시 집으로'); }
+      if (!late && miss.includes('ticket')) step('수험표 없음 → 시험장 본부 재발급', IMC_MORN.ticket);
       const eff = {}, addEff = (k, n) => { eff[k] = (eff[k] || 0) + n; };
       if (miss.includes('watch')) addEff('mental', -3);
       if (miss.includes('tape')) addEff('mental', -1);
       dec.forEach((d) => addEff('mental', d === 'phone' ? -1 : -2));
       if (eff.mental || eff.hp) imApply(E, eff, '준비물');
       M.forgot = miss.slice(); M.decoys = dec.slice();
-      if (!miss.length && !dec.length) imAlbum(E, '🎒', '수험표 · 신분증 · 시계 · 도시락 — 가방 완벽');
+      if (!miss.length && !dec.length && !late) imAlbum(E, '🎒', '수험표 · 신분증 · 시계 · 도시락 — 가방 완벽');
+      if (late) return imLateForgot(E, M, miss, step, () => { if (!M.forgot.length && !dec.length) imAlbum(E, '🎒', '수험표 · 신분증 · 시계 · 도시락 — 가방 완벽'); next(); }); // 수험표·신분증 깜빡 (g3-late.js)
       next();
     });
   });
@@ -8145,13 +9048,14 @@ function imMorning(E, stage) {
       step({ none: '버스 정상 운행 + 도보', taxi: '도로 정체 → 택시', run: `정체 → 뛰기 ${Math.max(0, 3 - T0.misses)}/3`, wait: `정체 → 기다리기 (지연 ${wait}분)`, police: '정체 → 112 순찰차 「수험생 수송」' }[T0.choice] || '버스', T0.cost);
       if (T0.choice === 'taxi') { imMoney(E, -IMC_MORN.taxiCost, '수능날 택시'); imAlbum(E, '🚕', '수능날 아침 택시 미터기'); }
       if (T0.choice === 'run') { E.statAdd('hp', -IMC_MORN.runHp); imAlbum(E, '🏃', '수능 한파 속 전력질주'); }
-      if (T0.choice === 'police') imAlbum(E, '🚓', '순찰차 뒷좌석 「수험생 수송 중」');
+      if (T0.choice === 'police' && !imLateOn(S)) imAlbum(E, '🚓', '순찰차 뒷좌석 「수험생 수송 중」');
       if (T0.choice === 'wait') imAlbum(E, '🚌', `꽉 막힌 버스 안 ${wait}분`);
+      if (T0.choice === 'police' && imLateOn(S)) return imLatePolice(E, M, next); // 112 · 순찰차 / 오토바이 (g3-late.js)
       next();
     });
   });
   seq.push((next) => { // 5. 시험장 착각 (드물게 · 미리 가 봤으면 없음)
-    M.venueP = S.flags['scout' + stage] ? 0 : 0.14;
+    M.venueP = S.flags['scout' + stage] ? 0 : S.flags.preSkip ? 0.45 : 0.14;
     const hit = F.venue != null ? !!F.venue : mode ? false : roll('venue') < M.venueP;
     if (!hit || M.clock > dl) return next();
     let ch = null;
@@ -8163,7 +9067,7 @@ function imMorning(E, stage) {
       next();
     });
   });
-  seq.push((next) => { step('교문 → 시험실 찾기', IMC_MORN.find); next(); });
+  seq.push((next) => { step('교문 → 시험실 찾기', IMC_MORN.find); if (imLateOn(S) && M.reissue && M.reissue.length) return imLateReissue(E, M, step, next); next(); });
   let i = 0;
   const go = () => { if (i < seq.length) seq[i++](go); else imMornEnd(E, M); };
   go();
@@ -8180,6 +9084,7 @@ function imMornEnd(E, M) {
     if (res === 'near') { imMental(E, -6); E.toast(`아슬아슬 입실 ${E.hm(arr)} · 멘탈 −6`, 'bad'); imAlbum(E, '😮‍💨', `${E.hm(arr)} 아슬아슬 입실`); }
     else imAlbum(E, '✅', `${E.hm(arr)} 여유 있게 입실`);
     if (ex) E.markSlot(ex.id, res === 'near' ? 'late' : 'ok');
+    if (imLateOn(S)) return imLatePhoneCheck(E, () => imCsatStart(E, ex)); // 1교시 전 휴대폰 제출 위기
     imCsatStart(E, ex);
   });
 }
@@ -8230,6 +9135,7 @@ function imCsatStart(E, s) {
   const S = E.G.S, t = imTrackOf(E), res = {}, qt = imQuizTime(E), M = (S.flags.morn1 || {}), forgot = M.forgot || [];
   const minis = [imMini(E, 'imTicketMini', { name: imName(S), no: S.examNo, csat: true, year: S.year + 1, date: `${S.year}-11-18(목)`, place: '제12시험장 ○○고등학교 제7시험실', track: t.id }, () => E.cardMini('2028학년도 수능', `수험표 · ${imName(S)} · 수험번호 ${S.examNo}`, 'urgent', 'exam'))];
   (S.track === 'voc' ? IMC_CSAT_PARTS_VOC : IMC_CSAT_PARTS).forEach((p) => {
+    if (p.k === 'hist' && imLateOn(S)) minis.push(imLateBroadcast(E)); // 4교시 안내 방송
     const cm = E.cardMini(`${p.n}교시 ${p.label}`, p.items, null, 'exam', 3);
     cm.board = `${p.n}교시 ${p.label} ${p.at}~${p.end}`; cm.clock = E.T(p.at);
     const en0 = cm.enter; cm.enter = function () { E.G.min = Math.max(E.G.min, E.T(p.at)); if (en0) return en0.apply(this, arguments); };
@@ -8262,6 +9168,7 @@ function imCsatStart(E, s) {
     imAlbum(E, '✏️', `${S.year}년 11월 18일, 수능 시험실`);
     E.G.min = Math.max(E.G.min, E.T('17:45'));
     imMental(E, -8);
+    if (imLateOn(S)) return imLateAfterCsat(E); // 교문 앞 부모님
     E.say([{ who: '감독관', text: '시험 종료. 답안지 걷겠습니다. 수고 많으셨습니다.' }, { who: '나', text: '…끝났다. 교문 밖이 벌써 어둡다.' }, { who: imNpcName(E, 'mate1', '도윤'), text: '(카톡) 끝!!!!! 수학 22번 뭐 나옴?? 아 아니다 말하지 마' }, { who: '나', text: '수험표 뒷면에 적어 온 답. 집에 가서 가채점하자.' }]);
   });
 }
@@ -8270,6 +9177,7 @@ function imGachae(E, done) {
   if (!R) return E.say([{ who: '나', text: '가채점할 답이 없다. …오늘은 그냥 자자.' }], done);
   if (S.flags.gachae === S.nth) return E.say([{ who: '나', text: '가채점은 끝. 숫자는 그만 보자.' }], done);
   S.flags.gachae = S.nth;
+  if (imLateOn(S) && !S.flags.cutMini) { S.flags.cutMini = 1; const cm = imLateCutMini(E, R); if (cm) { S.flags.gachae = 0; return E.runMinis([cm], () => imGachae(E, done)); } }
   const rows = imSkKeys().map((k) => [imSkLabel(k), `${R.subj[k].raw}<small>/${R.subj[k].max || (k === 'hist' ? 50 : 100)}</small>`, `${Math.max(1, R.subj[k].grade - (Math.random() < 0.3 ? 1 : 0))}~${R.subj[k].grade}`]);
   imCard(E, `<div class="eb">11월 · 수능날 밤 · 내 방</div><h2 style="font-size:26px">가채점</h2><p class="tag">수험표 뒷면에 적어 온 답을 정답과 맞춰 본다.<br>오르막 커뮤니티엔 벌써 「예상 등급컷」이 올라왔다.</p>${imTable(E, ['영역', '가채점 원점수', '예상 등급'], rows)}<div class="brief"><div>${E.esc(R.subj.kor.grade >= 3 ? '「킬러는 없댔는데…」 체감 불국어.' : '국어, 생각보다 잘 풀렸다.')}</div><div>진짜 성적표는 12월 10일. 그때까진 숫자 그만 보기.</div></div>`, () => { imApply(E, { mental: R.avgPct >= 80 ? 6 : -4 }, '가채점'); imAlbum(E, '📝', '수험표 뒷면 가채점'); if (done) done(); });
 }
@@ -8290,11 +9198,18 @@ function imSusiJudge(E, c, R, i) {
   else if (/교과/.test(c.type)) { have = (5 - ns) / 4; need = 0.76 + 0.07 * tierAdj + mj.cut * 0.006; }
   else if (/학종|종합/.test(c.type)) { have = S.saeng / 100 * 0.62 + (S.interview != null ? S.interview : 0.55) * 0.2 + (5 - ns) / 4 * 0.18; need = 0.7 + 0.07 * tierAdj + mj.cut * 0.006; }
   else { const sk = (S.sk.kor + S.sk.math) / 200; have = sk * 0.8 + (R ? R.avgPct / 100 * 0.2 : 0); need = 0.9 + 0.05 * tierAdj + mj.cut * 0.006; } // 논술: 경쟁률 수십 대 1
+  const LS = S.late && S.late.nth === S.nth ? S.late : {};
+  if (LS.skip && LS.skip[c.univ]) return { res: 'fail', absent: true, have: 0, need: Math.round(need * 100), minOK: R ? imMinOK(c.min, R) : !c.min };
+  if (/논술/.test(c.type || '') && LS.nonsul && LS.nonsul[c.univ] != null) have += (LS.nonsul[c.univ] - 0.5) * 0.08; // 논술 답안 미니 결과
   const v = have + nz, ok1 = v >= need, wait = !ok1 && v >= need - 0.035;
   const minOK = R ? imMinOK(c.min, R) : !c.min;
   const fc = (typeof window !== 'undefined' && window.__im && window.__im.force) || {};
   let res = ok1 ? (minOK ? 'pass' : 'minfail') : wait ? (minOK ? 'wait' : 'minfail') : 'fail';
   if (fc.minFail && res !== 'fail') res = 'minfail'; // 테스트 훅
+  if (imLateOn(S) && fc.late) { const cs = (S.susi && S.susi.cards) || [], idx = cs.indexOf(c) >= 0 ? cs.indexOf(c) : i; // 하반기 테스트 훅 (LATEEP)
+    if (imLF('susifail')) res = res === 'minfail' ? 'minfail' : 'fail';
+    if (imLF('susiwait') && idx === cs.findIndex((x) => x.tier === 'up') && res !== 'minfail') res = 'wait';
+    if (imLF('susipass') && idx === cs.findIndex((x) => x.tier === 'safe') && minOK) res = 'pass'; }
   return { res, have: Math.round(have * 100), need: Math.round(need * 100), minOK };
 }
 const IMC_RES_TXT = { pass: ['최초 합격', '#4FD69C'], wait: ['예비 번호', '#FFD54A'], minfail: ['최저 미충족', '#FF8A7A'], fail: ['불합격', '#B9C0DA'] };
@@ -8306,6 +9221,7 @@ function imSusiResults(E) {
 }
 function imTierRank(t) { return { up: 0, fit: 1, safe: 2 }[t] ?? 1; }
 function imDecFlow(E) { // 12월: 성적표 → 수시 발표 → (예비 → 추합 전화) → 정시 원서
+  if (imLateOn(E.G.S)) return imLateDec(E); // 하반기 확장: 수능 후 고사 · 성적표 배부 · 최저 판정 · 발표 달력 · 등록 · 예비 번호 (g3-late.js)
   const S = E.G.S, R = S.csat && S.csat.R, esc = E.esc;
   E.G.min = E.T('09:50');
   const afterSusi = () => {
@@ -8361,6 +9277,7 @@ function imGraduate(E, done) {
   });
 }
 function imFebFlow(E) {
+  if (imLateOn(E.G.S)) return imLateFeb(E); // 군별 발표 · 정시 추합 마지막 날 · 졸업식 (g3-late.js)
   const S = E.G.S;
   E.G.min = E.T('09:50');
   const endFail = () => imGraduate(E, () => {
@@ -8454,6 +9371,7 @@ function imOnDayStart(d, E, quiet) {
   if (first) imAlbum(E, '🗓️', `${imStartOf(mi).label} · 칠판 구석 D-day`);
   if (S.nth > 1 && mi === IM_MI.FEB) imAlbum(E, '🏢', `${imNth(S)} · 세대인재 재종반 개강`);
   if (first && !S.flags.toured) return imCard(E, imStoryHTML(E), () => imTour(E, runIntro), '동네 한 바퀴 ▶');
+  if (mi === IM_MI.OCT && S.nth === 1 && imLateOn(S)) { const tc = imLateTripCard(E); if (tc) return imLateNonsulTrip(E, tc, runIntro); } // 지난 토요일 원정 논술
   runIntro();
 }
 function imStoryHTML(E) {
@@ -8579,6 +9497,7 @@ function imDefaultIntro(E, mi) {
 }
 function imOnTick(dt, E, before) {
   const S = E.G.S, G = E.G, D = G.D; if (!D) return;
+  imLateTick(E);
   if (D.pool && !D.poolFired && G.min >= D.poolAt && G.mode === 'world') { D.poolFired = 1; const id = D.pool; S.flags['pool:' + id + ':' + S.nth] = 1; E.whenFree(() => imRunEvent(E, id)); }
   const mins = G.min - before;
   if (mins > 0) {
@@ -8613,7 +9532,7 @@ function imOnExit(E) {
 }
 function imSleep(E) {
   const S = E.G.S, up = imEveStageNext(E);
-  if (up && !S.flags['eve' + up]) return imEveRun(E, up, false, () => E.endDay(false));
+  if (up && !S.flags['eve' + up]) { if (imLateOn(S) && !S.flags.precall) return imLatePreCall(E, () => imEveRun(E, up, false, () => E.endDay(false))); return imEveRun(E, up, false, () => E.endDay(false)); }
   const fin = (sc, m) => {
     if (m && (m.choice === 'study' || m.choice === 0)) { const k = imWeakest(E); imGain(E, k, 2); imApply(E, { hp: -8, mental: -5, burnout: 4 }, '새벽 2시까지 한 문제 더', true); S.flags.allnight = true; }
     else imApply(E, { hp: 6, mental: 3 }, '불 끄기', true);
@@ -8677,7 +9596,7 @@ function imQuestsFor(E, mi) {
   if (S.nth === 1 && mi === (S.startMi || 0) && mi !== IM_MI.SEP) L.push({ id: 'q-hello', title: '엄마한테 인사', at: 'mom', icon: '🏠', color: IMC_COL.hr, cat: '생활', dueAt: '07:55' });
   if (S.track === 'voc' && S.nth === 1) { if (mi === IM_MI.SEP && S.vocGoal === 'dongil' && !(S.dongil && (S.dongil.applied || S.dongil.missed))) L.push({ id: 'q-dongil', title: '동일계 원서 3장 (특성화고교졸업자 전형)', at: 'door:staff', icon: '🎓', color: IMC_COL.hot, cat: '마감', dueAt: '17:50' }); }
   else if (mi === IM_MI.SEP && !(S.susi && S.susi.applied)) L.push({ id: 'q-wonseo', title: '수시 원서 6장 접수', at: 'door:room', icon: '📝', color: IMC_COL.hot, cat: '마감', dueAt: '18:00' });
-  if (mi === IM_MI.OCT && !S.flags.scout1 && imTakesCsat(S)) L.push(imScoutQuest());
+  if (mi === IM_MI.OCT && !S.flags.scout1 && imTakesCsat(S) && !(imLateOn(S) && imLF('noscout'))) L.push(imScoutQuest());
   return L.map((q) => Object.assign(q, { at: imLocFix(E, q.at) }));
 }
 function imOnQuestMiss(q, E) {
@@ -8832,6 +9751,8 @@ function imFinalHTML(E, o) {
     minfail: ['최저 미충족', '서류도 면접도 통과였는데, 수능 최저 한 등급이 모자랐다. 1년이 사라진 건 아니다.', '📉'],
     sixfail: ['6광탈', '수시 여섯 장이 모두 닿지 않았다. 그래도 버틴 1년은 그대로 남았다.', '🍂'],
     jaesu: ['재수 결심', '올해는 닿지 않았다. 한 번 더, 이번엔 내 속도로.', '🔁'],
+    regno: ['합격, 그리고 재수', `${sn}붙은 대학을 내려놓고 한 번 더 가기로 했다. 쉬운 결정이 아니었다 — 그래서 더 단단하다.`, '🔁'],
+    waitmiss: ['예비 번호, 한 끗', (() => { const w = (S.late && S.late.waitMiss) || {}; return `${w.univ ? w.univ + ' ' : ''}예비 ${w.no || '?'}번 → ${w.stop || '?'}번에서 멈췄다. 전화는 오지 않았지만, 거기까지 간 1년은 진짜다.`; })(), '🌙'],
     late: ['수능날, 닫힌 교문', `${(S.csat && S.csat.arr) || '08:1x'}, 교문이 먼저 닫혔다. 쌓은 실력은 그대로 남았다.`, '🚪'],
     burn: ['번아웃 · 응급실', '몸과 마음이 먼저 멈췄다. 쉬어 가는 것도 용기다.', '🛏️'],
     vocjob: ['졸업 후 취업', `${sn}${(S.vocJob || {}).name || ''} ${(S.vocJob || {}).role || ''} 최종 합격. 3월 첫 출근. AI전자과 실습실에서 다진 손이 이제 일터로 간다.`, '🧰'],
